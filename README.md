@@ -138,6 +138,9 @@ npm start   # interactive prompts when no args
 | `agent=` | Local agent for skill scaffold | none |
 | `model=` | Agent model id (`-m` / `--model`) | agent CLI default |
 | `reasoning-effort=` | `low` \| `medium` \| `high` (when agent supports it) | none |
+| `since=` / `until=` | Bulk only: publish day bounds (`YYYY-MM-DD`, UTC inclusive) | none |
+| `min-duration=` / `max-duration=` | Bulk only: length in whole seconds (inclusive) | none |
+| `title-includes=` / `title-excludes=` | Bulk only: title tokens (comma list, case-insensitive) | none |
 | `system-prompt=` | Extra skill-authoring guidance (appended to official skill contract) | empty |
 
 Supported `agent=` values:
