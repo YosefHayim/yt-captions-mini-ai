@@ -20,6 +20,8 @@ import {
   emptySystemPrompt,
   reasoningEffortValues,
   ReasoningEffort,
+  extractorModeValues,
+  ExtractorMode,
 } from './types.js';
 import { listAgentModels, requireAgentModel } from './agentModels.js';
 import { isIsoCalendarDay } from './filters/date-range.js';
@@ -58,13 +60,17 @@ const {
   OPTION_WITH_VALUE_TITLE_EXCLUDES,
   OPTION_WITH_VALUE_CONCURRENCY,
   OPTION_WITH_VALUE_MAX_VIDEOS,
+  OPTION_WITH_VALUE_EXTRACTOR,
   DEFAULT_BULK_CONCURRENCY,
+  DEFAULT_EXTRACTOR_MODE,
   MIN_BULK_CONCURRENCY,
   MAX_BULK_CONCURRENCY,
   MIN_MAX_VIDEOS,
   OPTION_BOOLEAN_AUTO,
   OPTION_BOOLEAN_STDOUT,
   OPTION_BOOLEAN_HELP,
+  OPTION_BOOLEAN_NO_CACHE,
+  OPTION_BOOLEAN_FORCE,
   NONE_AGENT_VALUE,
   CLI_OPTION_SEPARATOR,
   BOOLEAN_TRUE,
@@ -127,6 +133,7 @@ const VALUE_OPTION_KEYS = [
   OPTION_WITH_VALUE_TITLE_EXCLUDES,
   OPTION_WITH_VALUE_CONCURRENCY,
   OPTION_WITH_VALUE_MAX_VIDEOS,
+  OPTION_WITH_VALUE_EXTRACTOR,
 ] as const;
 
 const defaultOptions: CliOptions = {
@@ -149,6 +156,9 @@ const defaultOptions: CliOptions = {
   filterTitleExcludes: [],
   concurrency: DEFAULT_BULK_CONCURRENCY,
   maxVideos: null,
+  useCache: true,
+  forceRefresh: false,
+  extractorMode: DEFAULT_EXTRACTOR_MODE as ExtractorMode,
 };
 
 const isSubtitleFormat = (formatToken: string): formatToken is SubtitleFormat => {
@@ -353,6 +363,16 @@ const applyValueSetting = (optionKey: string, rawValue: string, parsedOptions: C
     parsedOptions.maxVideos = maxVideosValue;
     return;
   }
+  if (optionKey === OPTION_WITH_VALUE_EXTRACTOR) {
+    const extractorToken = rawValue.trim().toLowerCase();
+    if (!(extractorModeValues as readonly string[]).includes(extractorToken)) {
+      throw new Error(
+        `Invalid extractor "${rawValue}". Use one of: ${extractorModeValues.join(', ')}`,
+      );
+    }
+    parsedOptions.extractorMode = extractorToken as ExtractorMode;
+    return;
+  }
 };
 
 const isValueOptionKey = (optionKey: string): boolean => {
@@ -368,6 +388,14 @@ const parseBooleanFlag = (optionKey: string, parsedOptions: CliOptions): void =>
   }
   if (optionKey === OPTION_BOOLEAN_STDOUT) {
     parsedOptions.writeToStdout = true;
+    return;
+  }
+  if (optionKey === OPTION_BOOLEAN_NO_CACHE) {
+    parsedOptions.useCache = false;
+    return;
+  }
+  if (optionKey === OPTION_BOOLEAN_FORCE) {
+    parsedOptions.forceRefresh = true;
     return;
   }
 };
@@ -607,6 +635,9 @@ const parseInteractiveOptions = async (): Promise<CliOptions> => {
     filterTitleExcludes: [],
     concurrency: DEFAULT_BULK_CONCURRENCY,
     maxVideos: null,
+    useCache: true,
+    forceRefresh: false,
+    extractorMode: DEFAULT_EXTRACTOR_MODE as ExtractorMode,
   };
   outro(OUTRO_MESSAGE);
   return interactiveOptions;
@@ -640,7 +671,7 @@ const collectArguments = (argumentTokens: string[]): { sourceUrl: string; option
         continue;
       }
 
-      if (optionKey === OPTION_BOOLEAN_AUTO || optionKey === OPTION_BOOLEAN_STDOUT) {
+      if (optionKey === OPTION_BOOLEAN_AUTO || optionKey === OPTION_BOOLEAN_STDOUT || optionKey === OPTION_BOOLEAN_NO_CACHE || optionKey === OPTION_BOOLEAN_FORCE) {
         parseBooleanFlag(optionKey, parsedOptions);
         continue;
       }
@@ -686,6 +717,14 @@ const collectArguments = (argumentTokens: string[]): { sourceUrl: string; option
     }
     if (cliToken === OPTION_BOOLEAN_STDOUT) {
       parsedOptions.writeToStdout = true;
+      continue;
+    }
+    if (cliToken === OPTION_BOOLEAN_NO_CACHE) {
+      parsedOptions.useCache = false;
+      continue;
+    }
+    if (cliToken === OPTION_BOOLEAN_FORCE) {
+      parsedOptions.forceRefresh = true;
       continue;
     }
 

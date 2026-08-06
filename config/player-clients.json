@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "description": "Overridable Innertube client versions. Point YT_CAP_CLIENT_CONFIG at a custom file to update without a release.",
+  "preferredOrder": ["android", "ios", "web", "mweb", "tv", "android_vr", "web_embedded"],
+  "raceClientCount": 2,
+  "clients": {
+    "android": {
+      "clientVersion": "20.10.38",
+      "userAgent": "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip"
+    },
+    "ios": {
+      "clientVersion": "20.10.4",
+      "userAgent": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"
+    },
+    "web": {
+      "clientVersion": "2.20250925.01.00"
+    },
+    "mweb": {
+      "clientVersion": "2.20250925.01.00"
+    },
+    "tv": {
+      "clientVersion": "7.20250923.13.00"
+    },
+    "android_vr": {
+      "clientVersion": "1.65.10"
+    },
+    "web_embedded": {
+      "clientVersion": "1.20250923.21.00"
+    }
+  }
+}

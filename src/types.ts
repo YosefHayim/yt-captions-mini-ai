@@ -30,6 +30,11 @@ export type ReasoningEffort = typeof reasoningEffortValues[number];
 // Empty systemPrompt: composeSkillSystemPrompt builds the official per-agent skill authoring prompt.
 export const emptySystemPrompt = '';
 
+// Caption extractor backends: native Innertube, yt-dlp, or auto (native then yt-dlp).
+export const extractorModeValues = ['auto', 'native', 'ytdlp'] as const;
+// One allowed extractor mode token.
+export type ExtractorMode = typeof extractorModeValues[number];
+
 // ============================================================================
 // CLI / orchestration
 // ============================================================================
@@ -74,6 +79,12 @@ export type CliOptions = {
   concurrency: number;
   // Optional cap on bulk videos (playlist/channel); null = no cap.
   maxVideos: number | null;
+  // When true, read/write ~/.cache transcript entries.
+  useCache: boolean;
+  // When true, ignore cache and refresh from YouTube.
+  forceRefresh: boolean;
+  // Captions extractor backend (native Innertube / yt-dlp / auto).
+  extractorMode: ExtractorMode;
 };
 
 // Public metadata used to decide whether a bulk video id should be scraped.

@@ -1,12 +1,17 @@
-# yt-captions-mini-ai
+# yt-captions-mini-ai (`ytcap`)
 
 ![yt-captions-mini-ai](assets/hero.png)
 
+[![canary](https://github.com/YosefHayim/yt-captions-mini-ai/actions/workflows/canary.yml/badge.svg)](https://github.com/YosefHayim/yt-captions-mini-ai/actions/workflows/canary.yml)
+[![ci](https://github.com/YosefHayim/yt-captions-mini-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/YosefHayim/yt-captions-mini-ai/actions/workflows/ci.yml)
+
 Tiny [TypeScript](https://www.typescriptlang.org/) / [Node.js](https://nodejs.org/en) CLI that downloads public [YouTube](https://www.youtube.com/) captions — for a **video**, **playlist**, **channel**, or **channel Shorts** — and optionally pipes the transcript into a **local coding agent** to scaffold portable [`SKILL.md`](https://agentskills.io/specification) packages.
 
-Not a second [yt-dlp](https://github.com/yt-dlp/yt-dlp). That project is the full media Swiss-army knife across thousands of sites. This is a **YouTube-only**, captions-focused CLI: Innertube-first extraction, bulk concurrency, optional local-agent skill scaffolding.
+**Binary:** `ytcap` (alias `yt-captions-mini-ai`).
 
-## Why this (vs yt-dlp / other tools)
+Not a second [yt-dlp](https://github.com/yt-dlp/yt-dlp). That project is the full media Swiss-army knife across thousands of sites. This is a **YouTube-only**, captions-focused CLI: Innertube-first extraction, bulk concurrency, disk cache, optional yt-dlp fallback, local-agent skill scaffolding.
+
+## When to use us vs yt-dlp
 
 | Job | Prefer |
 | --- | --- |
@@ -61,25 +66,40 @@ VIDEO_ID=dQw4w9WgXcQ BULK_N=6 bash scripts/bench-captions.sh
 Requires [Node.js](https://nodejs.org/en) 20+.
 
 ```bash
+# Global (published package)
+npm install -g yt-captions-mini-ai
+ytcap url=https://www.youtube.com/watch?v=dQw4w9WgXcQ lang=en auto output-format=txt
+
+# From source
 git clone https://github.com/YosefHayim/yt-captions-mini-ai.git
 cd yt-captions-mini-ai
-npm install
+npm install          # prepare builds dist/
+npm start -- url=https://www.youtube.com/watch?v=dQw4w9WgXcQ lang=en auto output-format=txt
+# dev without build: npm run dev -- url=…
 ```
+
+Machine-oriented recipes for LLMs: [`llms.txt`](llms.txt). Agent skill: [`skills/yt-transcript/SKILL.md`](skills/yt-transcript/SKILL.md).
 
 ### Captions only
 
 ```bash
 # Single video
-npm start -- url=https://www.youtube.com/watch?v=dQw4w9WgXcQ output-format=txt auto
+ytcap url=https://www.youtube.com/watch?v=dQw4w9WgXcQ output-format=txt auto
 
 # Playlist (parallel workers; cap count for a quick scrape)
-npm start -- url=https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID output-format=txt auto concurrency=8 max-videos=20
+ytcap url=https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID output-format=txt auto concurrency=8 max-videos=20
 
 # Entire channel (Videos tab) → scraped-yt/channel-<name>/
-npm start -- url=https://www.youtube.com/@handle output-format=txt auto concurrency=8
+ytcap url=https://www.youtube.com/@handle output-format=txt auto concurrency=8
 
 # Channel Shorts tab → scraped-yt/shorts-<name>/
-npm start -- url=https://www.youtube.com/@handle/shorts output-format=txt auto
+ytcap url=https://www.youtube.com/@handle/shorts output-format=txt auto
+
+# Disk cache is on by default (~/.cache/yt-captions-mini-ai); force refresh:
+ytcap url=dQw4w9WgXcQ lang=en auto force output-format=txt
+
+# Optional yt-dlp fallback (yt-dlp must be on PATH)
+ytcap url=VIDEO_ID lang=en auto extractor=auto
 ```
 
 ### Skill scaffold (captions → local agent)
@@ -87,8 +107,8 @@ npm start -- url=https://www.youtube.com/@handle/shorts output-format=txt auto
 The named agent CLI must already be on your `PATH` (this tool does not install agents).
 
 ```bash
-npm start -- url=https://www.youtube.com/watch?v=VIDEO_ID agent=codex model=gpt-5.3-codex-spark
-npm start -- url=VIDEO_ID agent=grok model=grok-4.5 reasoning-effort=high
+ytcap url=https://www.youtube.com/watch?v=VIDEO_ID agent=codex model=gpt-5.3-codex-spark
+ytcap url=VIDEO_ID agent=grok model=grok-4.5 reasoning-effort=high
 ```
 
 Default system prompt authors **official-style skill packages** (YAML frontmatter + when-to-use + procedure), using each agent’s docs when known, otherwise [`docs/skill-authoring.md`](docs/skill-authoring.md). Extra guidance: `system-prompt="..."`.
@@ -133,8 +153,11 @@ npm start   # interactive prompts when no args
 | `out-dir=` | Output directory | `./scraped-yt` |
 | `stdout` | Print instead of writing files | off |
 | `cookies=` | Optional Netscape `cookies.txt` for public session cookies | none |
-| `concurrency=` | Parallel video workers for playlist/channel (`1`–`32`) | `4` |
+| `concurrency=` | Parallel video workers for playlist/channel (`1`–`32`); AIMD shrink on 429 | `4` |
 | `max-videos=` | Cap how many bulk videos to process | unlimited |
+| `extractor=` | `auto` (native→yt-dlp), `native`, `ytdlp` | `auto` |
+| `no-cache` | Disable disk transcript cache | off (cache on) |
+| `force` | Bypass cache and refresh from YouTube | off |
 | `agent=` | Local agent for skill scaffold | none |
 | `model=` | Agent model id (`-m` / `--model`) | agent CLI default |
 | `reasoning-effort=` | `low` \| `medium` \| `high` (when agent supports it) | none |
@@ -156,9 +179,9 @@ Supported `agent=` values:
 | `kimi` | Kimi CLI |
 | `kiro` | Kiro CLI (`kiro-cli`) |
 
-Scripts: `npm run typecheck` · `npm run build` · `npm start -- url=...`
+Scripts: `npm run typecheck` · `npm run build` · `npm start -- url=...` · `npm run dev -- url=...` · `npm run canary`
 
-Stack: [Effect](https://effect.website/), [@clack/prompts](https://github.com/bombshell-dev/clack).
+Stack: [Effect](https://effect.website/), [@clack/prompts](https://github.com/bombshell-dev/clack), [undici](https://github.com/nodejs/undici).
 
 ## Resilience & speed (YouTube captions path)
 
@@ -166,11 +189,16 @@ YouTube-only, captions-only (client ideas inspired by [yt-dlp](https://github.co
 
 - **Innertube-first** — call `youtubei/v1/player` before fetching watch HTML
 - **Sticky last-good client** — after the first hit, reuse that client for the rest of the process
-- **Preferred order** — `android` → `ios` → `web` → `mweb` → `tv` → `android_vr` → `web_embedded`
+- **Race top-2 clients** on cold miss (configurable via `config/player-clients.json`)
+- **Preferred order** — `android` → `ios` → `web` → … (overridable JSON / `YT_CAP_CLIENT_CONFIG`)
 - **HTML fallback** only when player returns no tracks
-- **Bulk workers** — `concurrency=` for playlist/channel; `max-videos=` to cap work
+- **extractor=auto** — native first, then optional **yt-dlp** if native fails
+- **Disk cache** — `~/.cache/yt-captions-mini-ai/transcripts/` (`force` / `no-cache` to skip)
+- **undici keep-alive** pool + **AIMD concurrency** when bulk hits HTTP 429
+- **PO token hooks** — `YT_CAP_PO_TOKEN` or `YT_CAP_PO_TOKEN_COMMAND` when YouTube requires pot
 - HTTP retries on 429/502/503/504 with backoff and `Retry-After`
 - Optional Netscape cookies + in-process `Set-Cookie` jar
+- **Nightly canary** — three public videos; status badge at the top of this README
 
 ## Scope
 
