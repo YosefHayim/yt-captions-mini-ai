@@ -1,6 +1,6 @@
 {
   "name": "yt-captions-mini-ai",
-  "version": "0.2.0",
+  "version": "0.0.4",
   "description": "Blazing-fast YouTube-only captions CLI (ytcap) with bulk concurrency, disk cache, and optional local-agent SKILL.md scaffolding",
   "private": false,
   "type": "module",
