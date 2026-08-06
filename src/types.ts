@@ -58,6 +58,46 @@ export type CliOptions = {
   systemPrompt: string;
   // Optional Netscape cookies.txt path for YouTube session cookies.
   cookiesFilePath: string | null;
+  // Bulk filter: include only videos published on/after this UTC calendar day (YYYY-MM-DD).
+  filterSinceDate: string | null;
+  // Bulk filter: include only videos published on/before this UTC calendar day (YYYY-MM-DD).
+  filterUntilDate: string | null;
+  // Bulk filter: minimum video duration in whole seconds (inclusive).
+  filterMinDurationSec: number | null;
+  // Bulk filter: maximum video duration in whole seconds (inclusive).
+  filterMaxDurationSec: number | null;
+  // Bulk filter: title must include ALL of these tokens (case-insensitive).
+  filterTitleIncludes: string[];
+  // Bulk filter: title must include NONE of these tokens (case-insensitive).
+  filterTitleExcludes: string[];
+};
+
+// Public metadata used to decide whether a bulk video id should be scraped.
+export type YoutubeVideoMetadata = {
+  // 11-character YouTube video identifier.
+  videoId: string;
+  // Video title from player / microformat (empty string when missing).
+  title: string;
+  // Publish time as ISO-8601 when known; null when YouTube omits it.
+  publishedAtIso: string | null;
+  // Length in whole seconds when known; null when omitted.
+  durationSec: number | null;
+};
+
+// Active bulk filters derived from CLI (same fields as CliOptions filter*).
+export type VideoFilterCriteria = {
+  // Inclusive lower bound publish day (YYYY-MM-DD) or null.
+  sinceDate: string | null;
+  // Inclusive upper bound publish day (YYYY-MM-DD) or null.
+  untilDate: string | null;
+  // Inclusive minimum duration seconds or null.
+  minDurationSec: number | null;
+  // Inclusive maximum duration seconds or null.
+  maxDurationSec: number | null;
+  // Title must contain each token (case-insensitive).
+  titleIncludes: string[];
+  // Title must contain none of these tokens (case-insensitive).
+  titleExcludes: string[];
 };
 
 // One video's converted caption artifacts plus plain-text seed for the local agent.

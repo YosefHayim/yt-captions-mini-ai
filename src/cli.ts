@@ -22,7 +22,9 @@ import {
   ReasoningEffort,
 } from './types.js';
 import { listAgentModels, requireAgentModel } from './agentModels.js';
-
+import { isIsoCalendarDay } from './filters/date-range.js';
+import { parseDurationSecondsToken } from './filters/duration.js';
+import { parseTitleTokenList } from './filters/title.js';
 import { CONSTANTS } from './constants.js';
 
 const {
@@ -48,6 +50,12 @@ const {
   OPTION_WITH_VALUE_SYSTEM_PROMPT,
   OPTION_WITH_VALUE_COOKIES,
   OPTION_WITH_VALUE_URL,
+  OPTION_WITH_VALUE_SINCE,
+  OPTION_WITH_VALUE_UNTIL,
+  OPTION_WITH_VALUE_MIN_DURATION,
+  OPTION_WITH_VALUE_MAX_DURATION,
+  OPTION_WITH_VALUE_TITLE_INCLUDES,
+  OPTION_WITH_VALUE_TITLE_EXCLUDES,
   OPTION_BOOLEAN_AUTO,
   OPTION_BOOLEAN_STDOUT,
   OPTION_BOOLEAN_HELP,
@@ -105,6 +113,12 @@ const VALUE_OPTION_KEYS = [
   OPTION_WITH_VALUE_SYSTEM_PROMPT,
   OPTION_WITH_VALUE_COOKIES,
   OPTION_WITH_VALUE_URL,
+  OPTION_WITH_VALUE_SINCE,
+  OPTION_WITH_VALUE_UNTIL,
+  OPTION_WITH_VALUE_MIN_DURATION,
+  OPTION_WITH_VALUE_MAX_DURATION,
+  OPTION_WITH_VALUE_TITLE_INCLUDES,
+  OPTION_WITH_VALUE_TITLE_EXCLUDES,
 ] as const;
 
 
@@ -121,6 +135,12 @@ const defaultOptions: CliOptions = {
   reasoningEffort: null,
   systemPrompt: emptySystemPrompt,
   cookiesFilePath: null,
+  filterSinceDate: null,
+  filterUntilDate: null,
+  filterMinDurationSec: null,
+  filterMaxDurationSec: null,
+  filterTitleIncludes: [],
+  filterTitleExcludes: [],
 };
 
 const isSubtitleFormat = (formatToken: string): formatToken is SubtitleFormat => {
@@ -271,6 +291,36 @@ const applyValueSetting = (optionKey: string, rawValue: string, parsedOptions: C
     } else {
       parsedOptions.cookiesFilePath = null;
     }
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_SINCE) {
+    if (!isIsoCalendarDay(rawValue)) {
+      throw new Error(`Invalid since date "${rawValue}" (use YYYY-MM-DD)`);
+    }
+    parsedOptions.filterSinceDate = rawValue.trim();
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_UNTIL) {
+    if (!isIsoCalendarDay(rawValue)) {
+      throw new Error(`Invalid until date "${rawValue}" (use YYYY-MM-DD)`);
+    }
+    parsedOptions.filterUntilDate = rawValue.trim();
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_MIN_DURATION) {
+    parsedOptions.filterMinDurationSec = parseDurationSecondsToken(rawValue);
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_MAX_DURATION) {
+    parsedOptions.filterMaxDurationSec = parseDurationSecondsToken(rawValue);
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_TITLE_INCLUDES) {
+    parsedOptions.filterTitleIncludes = parseTitleTokenList(rawValue);
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_TITLE_EXCLUDES) {
+    parsedOptions.filterTitleExcludes = parseTitleTokenList(rawValue);
     return;
   }
 };
@@ -518,6 +568,12 @@ const parseInteractiveOptions = async (): Promise<CliOptions> => {
     reasoningEffort,
     systemPrompt,
     cookiesFilePath,
+    filterSinceDate: null,
+    filterUntilDate: null,
+    filterMinDurationSec: null,
+    filterMaxDurationSec: null,
+    filterTitleIncludes: [],
+    filterTitleExcludes: [],
   };
   outro(OUTRO_MESSAGE);
   return interactiveOptions;

@@ -27,6 +27,9 @@ Keep this project intentionally small and boring.
 - `src/captions.ts` — caption track parsing and URL building.
 - `src/playlist.ts` — playlist page extraction and ID collection.
 - `src/channel.ts` — channel Videos/Shorts tab discovery + bulk folder names.
+- `src/video-metadata.ts` — public title/duration/publish metadata for bulk filters.
+- `src/video-filters.ts` — AND-combine date/duration/title gates for bulk lists.
+- `src/filters/date-range.ts` | `duration.ts` | `title.ts` — individual bulk filters.
 - `src/http.ts` — network helpers.
 - `src/parsing.ts` — generic HTML + JSON extraction helpers.
 - `src/log.ts` — structured console logs.

@@ -33,6 +33,7 @@ import { runLocalAgent } from './agent.js';
 import { requireAgentModel, sanitizeModelFolderName } from './agentModels.js';
 import { loadNetscapeCookieFile } from './cookies.js';
 import { parseSkillPackage, persistSkillPackage } from './skill-output.js';
+import { criteriaFromCliOptions, filterVideoIdsByCriteria } from './video-filters.js';
 
 import { CONSTANTS } from './constants.js';
 
@@ -559,7 +560,11 @@ const runForPlaylistUrl = async (playlistUrl: string, options: CliOptions): Prom
     throw new Error(`${LOG_PLAYLIST_NOT_FOUND} ${listId}`);
   }
   logInfo(`${LOG_PLAYLIST_FETCHED} ${listId}: ${videoIds.length} ${LOG_PLAYLIST_COUNT_MESSAGE}`);
-  await processVideoIdList(videoIds, options, null);
+  const filteredPlaylistIds = await filterVideoIdsByCriteria(videoIds, criteriaFromCliOptions(options));
+  if (!filteredPlaylistIds.length) {
+    throw new Error(`${LOG_PLAYLIST_NOT_FOUND} ${listId} (all videos filtered out)`);
+  }
+  await processVideoIdList(filteredPlaylistIds, options, null);
 };
 
 const runForChannelUrl = async (channelUrl: string, options: CliOptions): Promise<void> => {
@@ -582,8 +587,14 @@ const runForChannelUrl = async (channelUrl: string, options: CliOptions): Promis
     `${LOG_CHANNEL_FETCHED} ${channelLabel}: ${videoIds.length} ${LOG_CHANNEL_COUNT_MESSAGE} ${channelTabKind} tab`,
   );
 
-  // 3) Write captions/agents under scraped-yt/channel-<name> or scraped-yt/shorts-<name>.
-  await processVideoIdList(videoIds, options, bulkOutDirectory);
+  // 3) Optional date / duration / title filters before scrape.
+  const filteredChannelIds = await filterVideoIdsByCriteria(videoIds, criteriaFromCliOptions(options));
+  if (!filteredChannelIds.length) {
+    throw new Error(`${LOG_CHANNEL_NOT_FOUND} ${channelLabel} (${channelTabKind}) after filters`);
+  }
+
+  // 4) Write captions/agents under scraped-yt/channel-<name> or scraped-yt/shorts-<name>.
+  await processVideoIdList(filteredChannelIds, options, bulkOutDirectory);
 };
 
 const run = async (): Promise<void> => {
