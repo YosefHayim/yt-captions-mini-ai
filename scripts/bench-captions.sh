@@ -52,8 +52,9 @@ if [[ -f "$MAIN_ROOT/src/main.ts" ]]; then
 fi
 
 if command -v yt-dlp >/dev/null 2>&1; then
+  # Fair compare: one language only (en), same job shape as our CLI lang=en.
   time_cmd "ytdlp_single_subs_only" \
-    yt-dlp --skip-download --write-auto-subs --sub-langs "en.*" --sub-format vtt \
+    yt-dlp --skip-download --write-auto-subs --sub-langs "en" --sub-format vtt \
     -o "$OUT_BASE/ytdlp-single/%(id)s" "$VIDEO_URL"
 else
   echo "ytdlp_single_subs_only                           SKIP (yt-dlp not installed)"
@@ -73,7 +74,7 @@ time_cmd "feature_bulk_concurrency_8" \
 
 if command -v yt-dlp >/dev/null 2>&1; then
   time_cmd "ytdlp_playlist_subs_N8" \
-    yt-dlp --skip-download --write-auto-subs --sub-langs "en.*" --sub-format vtt \
+    yt-dlp --skip-download --write-auto-subs --sub-langs "en" --sub-format vtt \
     -N 8 --playlist-end "$BULK_N" \
     -o "$OUT_BASE/ytdlp-bulk/%(id)s" "$PLAYLIST_URL"
 else
