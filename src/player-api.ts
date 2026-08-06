@@ -31,7 +31,12 @@ const {
   LOG_CLIENT_PREFIX,
   LOG_CLIENT_EMPTY,
   LOG_CLIENT_FAILED,
+  LOG_STICKY_CLIENT,
+  PREFERRED_CLIENT_ORDER,
 } = CONSTANTS.playerApi;
+
+// Last player client that returned caption tracks in this process (sticky fast path).
+let stickyPlayerClientLabel: string | null = null;
 const {
   CONTENT_TYPE_HEADER,
   CONTENT_TYPE_JSON,
@@ -439,6 +444,39 @@ const requestCaptionTracksWithProfile = async (
   return parseTracksFromPayload(playerApiResponse);
 };
 
+const orderPlayerClientProfiles = (): PlayerClientProfile[] => {
+  // 1) Prefer sticky last-good client for subsequent videos in the same process.
+  // 2) Otherwise walk PREFERRED_CLIENT_ORDER (android first — usually has tracks).
+  const profilesByLabel = new Map(
+    PLAYER_CLIENT_PROFILES.map((clientProfile) => [clientProfile.profileLabel, clientProfile]),
+  );
+  const orderedProfiles: PlayerClientProfile[] = [];
+  const seenLabels = new Set<string>();
+
+  const pushProfileLabel = (profileLabel: string): void => {
+    if (seenLabels.has(profileLabel)) {
+      return;
+    }
+    const clientProfile = profilesByLabel.get(profileLabel);
+    if (!clientProfile) {
+      return;
+    }
+    seenLabels.add(profileLabel);
+    orderedProfiles.push(clientProfile);
+  };
+
+  if (stickyPlayerClientLabel) {
+    pushProfileLabel(stickyPlayerClientLabel);
+  }
+  for (const preferredLabel of PREFERRED_CLIENT_ORDER) {
+    pushProfileLabel(preferredLabel);
+  }
+  for (const clientProfile of PLAYER_CLIENT_PROFILES) {
+    pushProfileLabel(clientProfile.profileLabel);
+  }
+  return orderedProfiles;
+};
+
 export const fetchTracksFromPlayerApi = async (
   watchUrl: string,
   videoId: string,
@@ -449,9 +487,14 @@ export const fetchTracksFromPlayerApi = async (
   const languageHint = getLanguageHint(playerConfig);
   const regionHint = getPlaybackRegion(playerConfig);
   const webClientVersionOverride = playerConfig?.INNERTUBE_CONTEXT_CLIENT_VERSION ?? null;
+  const orderedProfiles = orderPlayerClientProfiles();
 
-  for (let profileIndex = 0; profileIndex < PLAYER_CLIENT_PROFILES.length; profileIndex += 1) {
-    const clientProfile = PLAYER_CLIENT_PROFILES[profileIndex];
+  if (stickyPlayerClientLabel) {
+    logInfo(`[${videoId}] ${LOG_STICKY_CLIENT}: ${stickyPlayerClientLabel}`);
+  }
+
+  for (let profileIndex = 0; profileIndex < orderedProfiles.length; profileIndex += 1) {
+    const clientProfile = orderedProfiles[profileIndex];
     try {
       const captionTracks = await requestCaptionTracksWithProfile(
         videoId,
@@ -464,6 +507,7 @@ export const fetchTracksFromPlayerApi = async (
         playerConfig,
       );
       if (captionTracks.length > 0) {
+        stickyPlayerClientLabel = clientProfile.profileLabel;
         logInfo(
           `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ok (${captionTracks.length} tracks)`,
         );
@@ -478,10 +522,16 @@ export const fetchTracksFromPlayerApi = async (
       );
     }
 
-    if (profileIndex < PLAYER_CLIENT_PROFILES.length - 1) {
+    // Only delay after a miss when more clients remain (sticky hits skip this path).
+    if (profileIndex < orderedProfiles.length - 1) {
       await sleepBriefly(CLIENT_ATTEMPT_DELAY_MS);
     }
   }
 
   return [];
+};
+
+// Test/benchmark helper: clear sticky client between runs.
+export const resetStickyPlayerClient = (): void => {
+  stickyPlayerClientLabel = null;
 };

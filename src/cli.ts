@@ -48,6 +48,12 @@ const {
   OPTION_WITH_VALUE_SYSTEM_PROMPT,
   OPTION_WITH_VALUE_COOKIES,
   OPTION_WITH_VALUE_URL,
+  OPTION_WITH_VALUE_CONCURRENCY,
+  OPTION_WITH_VALUE_MAX_VIDEOS,
+  DEFAULT_BULK_CONCURRENCY,
+  MIN_BULK_CONCURRENCY,
+  MAX_BULK_CONCURRENCY,
+  MIN_MAX_VIDEOS,
   OPTION_BOOLEAN_AUTO,
   OPTION_BOOLEAN_STDOUT,
   OPTION_BOOLEAN_HELP,
@@ -105,9 +111,9 @@ const VALUE_OPTION_KEYS = [
   OPTION_WITH_VALUE_SYSTEM_PROMPT,
   OPTION_WITH_VALUE_COOKIES,
   OPTION_WITH_VALUE_URL,
+  OPTION_WITH_VALUE_CONCURRENCY,
+  OPTION_WITH_VALUE_MAX_VIDEOS,
 ] as const;
-
-
 
 const defaultOptions: CliOptions = {
   formats: DEFAULT_FORMAT_LIST,
@@ -121,6 +127,8 @@ const defaultOptions: CliOptions = {
   reasoningEffort: null,
   systemPrompt: emptySystemPrompt,
   cookiesFilePath: null,
+  concurrency: DEFAULT_BULK_CONCURRENCY,
+  maxVideos: null,
 };
 
 const isSubtitleFormat = (formatToken: string): formatToken is SubtitleFormat => {
@@ -271,6 +279,28 @@ const applyValueSetting = (optionKey: string, rawValue: string, parsedOptions: C
     } else {
       parsedOptions.cookiesFilePath = null;
     }
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_CONCURRENCY) {
+    const concurrencyValue = Number.parseInt(rawValue, 10);
+    if (
+      !Number.isFinite(concurrencyValue)
+      || concurrencyValue < MIN_BULK_CONCURRENCY
+      || concurrencyValue > MAX_BULK_CONCURRENCY
+    ) {
+      throw new Error(
+        `Invalid concurrency "${rawValue}". Use an integer ${MIN_BULK_CONCURRENCY}–${MAX_BULK_CONCURRENCY}.`,
+      );
+    }
+    parsedOptions.concurrency = concurrencyValue;
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_MAX_VIDEOS) {
+    const maxVideosValue = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(maxVideosValue) || maxVideosValue < MIN_MAX_VIDEOS) {
+      throw new Error(`Invalid max-videos "${rawValue}". Use an integer >= ${MIN_MAX_VIDEOS}.`);
+    }
+    parsedOptions.maxVideos = maxVideosValue;
     return;
   }
 };
@@ -518,6 +548,8 @@ const parseInteractiveOptions = async (): Promise<CliOptions> => {
     reasoningEffort,
     systemPrompt,
     cookiesFilePath,
+    concurrency: DEFAULT_BULK_CONCURRENCY,
+    maxVideos: null,
   };
   outro(OUTRO_MESSAGE);
   return interactiveOptions;

@@ -135,6 +135,8 @@ export const CONSTANTS = {
     OPTION_WITH_VALUE_SYSTEM_PROMPT: 'system-prompt',
     OPTION_WITH_VALUE_COOKIES: 'cookies',
     OPTION_WITH_VALUE_URL: 'url',
+    OPTION_WITH_VALUE_CONCURRENCY: 'concurrency',
+    OPTION_WITH_VALUE_MAX_VIDEOS: 'max-videos',
     OPTION_BOOLEAN_AUTO: 'auto',
     OPTION_BOOLEAN_STDOUT: 'stdout',
     OPTION_BOOLEAN_HELP: 'help',
@@ -174,7 +176,11 @@ export const CONSTANTS = {
     LABEL_CLI_DEFAULT_MODEL: 'CLI default (no -m)',
     LABEL_SKIP_REASONING_EFFORT: 'Skip (CLI default effort)',
     USAGE_TEXT:
-      'Usage: npm start url=<youtube-url|@channel|playlist|video-id> [format=vtt,srt] [lang=en] [auto] [stdout] [out-dir=./scraped-yt] [output-format=txt|md|json|jsonl] [cookies=./cookies.txt] [agent=codex|grok|devin|claude|gemini|kiro|kimi|agent|cursor] [model=<id>] [reasoning-effort=high|medium|low] [system-prompt="..."]',
+      'Usage: npm start url=<youtube-url|@channel|playlist|video-id> [format=vtt,srt] [lang=en] [auto] [stdout] [out-dir=./scraped-yt] [output-format=txt|md|json|jsonl] [cookies=./cookies.txt] [concurrency=4] [max-videos=N] [agent=codex|grok|devin|claude|gemini|kiro|kimi|agent|cursor] [model=<id>] [reasoning-effort=high|medium|low] [system-prompt="..."]',
+    DEFAULT_BULK_CONCURRENCY: 4,
+    MIN_BULK_CONCURRENCY: 1,
+    MAX_BULK_CONCURRENCY: 32,
+    MIN_MAX_VIDEOS: 1,
     HTTP_SCHEME_PREFIX: 'http://',
     HTTPS_SCHEME_PREFIX: 'https://',
   },
@@ -230,7 +236,12 @@ export const CONSTANTS = {
     SOURCE_SHORTS_ID_PATTERN: /\/shorts\/([A-Za-z0-9_-]{11})/,
     VIDEO_INDEX_OFFSET: 1,
     SHORT_DELAY_MS: 450,
+    // Spacing between bulk workers only when concurrency is 1 (serial mode).
+    SERIAL_VIDEO_DELAY_MS: 150,
     EXIT_CODE_FAILURE: 1,
+    LOG_INNERTUBE_FIRST_PREFIX: 'innertube-first tracks found:',
+    LOG_HTML_FALLBACK_PREFIX: 'watch HTML fallback tracks found:',
+    LOG_BULK_CONCURRENCY: 'bulk concurrency:',
     LOG_TRACKS_NOT_FOUND: 'none',
     LOG_PLAYLIST_NOT_FOUND: 'No playlist videos found for',
     LOG_NO_TRACK: 'No suitable caption track for',
@@ -293,6 +304,17 @@ export const CONSTANTS = {
     LOG_CLIENT_PREFIX: 'player client',
     LOG_CLIENT_EMPTY: 'returned no caption tracks',
     LOG_CLIENT_FAILED: 'failed',
+    LOG_STICKY_CLIENT: 'sticky player client',
+    // Prefer the client that usually returns tracks first (android before android_vr).
+    PREFERRED_CLIENT_ORDER: [
+      'android',
+      'ios',
+      'web',
+      'mweb',
+      'tv',
+      'android_vr',
+      'web_embedded',
+    ],
   },
 
   playlist: {

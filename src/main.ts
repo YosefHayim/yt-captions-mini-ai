@@ -55,8 +55,11 @@ const {
   SOURCE_WATCH_ID_PATTERN,
   SOURCE_SHORTS_ID_PATTERN,
   VIDEO_INDEX_OFFSET,
-  SHORT_DELAY_MS,
+  SERIAL_VIDEO_DELAY_MS,
   EXIT_CODE_FAILURE,
+  LOG_INNERTUBE_FIRST_PREFIX,
+  LOG_HTML_FALLBACK_PREFIX,
+  LOG_BULK_CONCURRENCY,
   LOG_TRACKS_NOT_FOUND,
   LOG_PLAYLIST_NOT_FOUND,
   LOG_NO_TRACK,
@@ -73,7 +76,6 @@ const {
   LOG_VIDEO_PROGRESS,
   LOG_PLAYLIST_VIDEO_SKIPPED,
   LOG_CHANNEL_NOT_FOUND,
-  LOG_TRACKS_PREFIX,
   LOG_FALLBACK_TRACKS_PREFIX,
   LOG_MULTI_CLIENT_TRACKS_PREFIX,
   LOG_WATCH_HTML_SKIPPED,
@@ -286,20 +288,26 @@ const loadCaptionTracksForVideo = async (
   videoId: string,
   canonicalWatchUrl: string,
 ): Promise<{ captionTracks: YoutubeCaptionTrack[]; pageHtml: string | null }> => {
+  // Fast path: Innertube player first (no watch HTML). Sticky client makes bulk cheap.
+  let captionTracks = await fetchTracksFromPlayerApi(canonicalWatchUrl, videoId, null);
+  if (captionTracks.length > 0) {
+    logTrackSummary(videoId, LOG_INNERTUBE_FIRST_PREFIX, captionTracks);
+    return { captionTracks, pageHtml: null };
+  }
+
+  // Slow path: watch HTML for ytInitialPlayerResponse + ytcfg, then player again with config.
+  logWarn(`[${videoId}] ${LOG_WATCH_HTML_SKIPPED}`);
   const watchPage = await fetchTextResourceOptional(canonicalWatchUrl);
   const pageHtml = watchPage?.bodyText ?? null;
 
-  let captionTracks: YoutubeCaptionTrack[] = [];
   if (pageHtml) {
     const playerPayload = extractEmbeddedJson(pageHtml, YOU_TUBE_INITIAL_PLAYER_RESPONSE_MARKER);
     if (playerPayload) {
       captionTracks = parseTracksFromPayload(playerPayload);
-      logTrackSummary(videoId, LOG_TRACKS_PREFIX, captionTracks);
+      logTrackSummary(videoId, LOG_HTML_FALLBACK_PREFIX, captionTracks);
     } else {
       logWarn(`[${videoId}] ${LOG_MISSING_PLAYER_PAYLOAD} ${videoId}`);
     }
-  } else {
-    logWarn(`[${videoId}] ${LOG_WATCH_HTML_SKIPPED}`);
   }
 
   if (captionTracks.length === 0) {
@@ -520,6 +528,27 @@ const configureSessionCookies = async (cookiesFilePath: string | null): Promise<
   logInfo(`${LOG_COOKIES_LOADED} ${loadedCookieCount} from ${cookiesFilePath}`);
 };
 
+const runVideoWorkers = async (
+  videoIds: string[],
+  concurrency: number,
+  processOneVideo: (videoId: string, index: number) => Promise<void>,
+): Promise<void> => {
+  // Shared worker pool: each worker pulls the next video index until drained.
+  let nextVideoIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, videoIds.length));
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const videoIndex = nextVideoIndex;
+      nextVideoIndex += 1;
+      if (videoIndex >= videoIds.length) {
+        return;
+      }
+      await processOneVideo(videoIds[videoIndex], videoIndex);
+    }
+  });
+  await Promise.all(workers);
+};
+
 const processVideoIdList = async (
   videoIds: string[],
   options: CliOptions,
@@ -535,17 +564,35 @@ const processVideoIdList = async (
           outDirectory: bulkOutDirectory,
         };
 
-  for (let index = 0; index < videoIds.length; index += 1) {
-    const videoId = videoIds[index];
-    logInfo(`[#${index + VIDEO_INDEX_OFFSET}/${videoIds.length}] ${LOG_VIDEO_PROGRESS} ${videoId}`);
+  // Agents are heavy; keep serial unless the user explicitly raised concurrency.
+  const effectiveConcurrency =
+    runOptions.localAgent && runOptions.concurrency === CONSTANTS.cli.DEFAULT_BULK_CONCURRENCY
+      ? 1
+      : runOptions.concurrency;
+
+  const cappedVideoIds =
+    runOptions.maxVideos !== null && runOptions.maxVideos < videoIds.length
+      ? videoIds.slice(0, runOptions.maxVideos)
+      : videoIds;
+
+  if (cappedVideoIds.length !== videoIds.length) {
+    logInfo(`max-videos: using ${cappedVideoIds.length} of ${videoIds.length}`);
+  }
+  logInfo(`${LOG_BULK_CONCURRENCY} ${effectiveConcurrency}`);
+
+  await runVideoWorkers(cappedVideoIds, effectiveConcurrency, async (videoId, index) => {
+    logInfo(`[#${index + VIDEO_INDEX_OFFSET}/${cappedVideoIds.length}] ${LOG_VIDEO_PROGRESS} ${videoId}`);
     try {
       const bundle = await buildTranscriptBundleFromVideo(`${WATCH_QUERY_PREFIX}${videoId}`, runOptions);
       await runAndPersistAgent(runOptions, bundle);
     } catch (downloadError) {
       logWarn(`${LOG_PLAYLIST_VIDEO_SKIPPED} ${videoId}: ${String(downloadError)}`);
     }
-    await new Promise((wakeUp) => setTimeout(wakeUp, SHORT_DELAY_MS));
-  }
+    // Serial mode: small gap to reduce 429s. Concurrent mode: no artificial delay.
+    if (effectiveConcurrency === 1) {
+      await new Promise((wakeUp) => setTimeout(wakeUp, SERIAL_VIDEO_DELAY_MS));
+    }
+  });
 };
 
 const runForPlaylistUrl = async (playlistUrl: string, options: CliOptions): Promise<void> => {

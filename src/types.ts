@@ -58,6 +58,10 @@ export type CliOptions = {
   systemPrompt: string;
   // Optional Netscape cookies.txt path for YouTube session cookies.
   cookiesFilePath: string | null;
+  // Max parallel video workers for playlist/channel bulk (1 = serial).
+  concurrency: number;
+  // Optional cap on bulk videos (playlist/channel); null = no cap.
+  maxVideos: number | null;
 };
 
 // One video's converted caption artifacts plus plain-text seed for the local agent.
