@@ -70,6 +70,10 @@ export type CliOptions = {
   filterTitleIncludes: string[];
   // Bulk filter: title must include NONE of these tokens (case-insensitive).
   filterTitleExcludes: string[];
+  // Max parallel video workers for playlist/channel bulk (1 = serial).
+  concurrency: number;
+  // Optional cap on bulk videos (playlist/channel); null = no cap.
+  maxVideos: number | null;
 };
 
 // Public metadata used to decide whether a bulk video id should be scraped.

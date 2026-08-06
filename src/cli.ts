@@ -56,6 +56,12 @@ const {
   OPTION_WITH_VALUE_MAX_DURATION,
   OPTION_WITH_VALUE_TITLE_INCLUDES,
   OPTION_WITH_VALUE_TITLE_EXCLUDES,
+  OPTION_WITH_VALUE_CONCURRENCY,
+  OPTION_WITH_VALUE_MAX_VIDEOS,
+  DEFAULT_BULK_CONCURRENCY,
+  MIN_BULK_CONCURRENCY,
+  MAX_BULK_CONCURRENCY,
+  MIN_MAX_VIDEOS,
   OPTION_BOOLEAN_AUTO,
   OPTION_BOOLEAN_STDOUT,
   OPTION_BOOLEAN_HELP,
@@ -119,9 +125,9 @@ const VALUE_OPTION_KEYS = [
   OPTION_WITH_VALUE_MAX_DURATION,
   OPTION_WITH_VALUE_TITLE_INCLUDES,
   OPTION_WITH_VALUE_TITLE_EXCLUDES,
+  OPTION_WITH_VALUE_CONCURRENCY,
+  OPTION_WITH_VALUE_MAX_VIDEOS,
 ] as const;
-
-
 
 const defaultOptions: CliOptions = {
   formats: DEFAULT_FORMAT_LIST,
@@ -141,6 +147,8 @@ const defaultOptions: CliOptions = {
   filterMaxDurationSec: null,
   filterTitleIncludes: [],
   filterTitleExcludes: [],
+  concurrency: DEFAULT_BULK_CONCURRENCY,
+  maxVideos: null,
 };
 
 const isSubtitleFormat = (formatToken: string): formatToken is SubtitleFormat => {
@@ -323,6 +331,28 @@ const applyValueSetting = (optionKey: string, rawValue: string, parsedOptions: C
     parsedOptions.filterTitleExcludes = parseTitleTokenList(rawValue);
     return;
   }
+  if (optionKey === OPTION_WITH_VALUE_CONCURRENCY) {
+    const concurrencyValue = Number.parseInt(rawValue, 10);
+    if (
+      !Number.isFinite(concurrencyValue)
+      || concurrencyValue < MIN_BULK_CONCURRENCY
+      || concurrencyValue > MAX_BULK_CONCURRENCY
+    ) {
+      throw new Error(
+        `Invalid concurrency "${rawValue}". Use an integer ${MIN_BULK_CONCURRENCY}–${MAX_BULK_CONCURRENCY}.`,
+      );
+    }
+    parsedOptions.concurrency = concurrencyValue;
+    return;
+  }
+  if (optionKey === OPTION_WITH_VALUE_MAX_VIDEOS) {
+    const maxVideosValue = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(maxVideosValue) || maxVideosValue < MIN_MAX_VIDEOS) {
+      throw new Error(`Invalid max-videos "${rawValue}". Use an integer >= ${MIN_MAX_VIDEOS}.`);
+    }
+    parsedOptions.maxVideos = maxVideosValue;
+    return;
+  }
 };
 
 const isValueOptionKey = (optionKey: string): boolean => {
@@ -338,6 +368,7 @@ const parseBooleanFlag = (optionKey: string, parsedOptions: CliOptions): void =>
   }
   if (optionKey === OPTION_BOOLEAN_STDOUT) {
     parsedOptions.writeToStdout = true;
+    return;
   }
 };
 
@@ -574,6 +605,8 @@ const parseInteractiveOptions = async (): Promise<CliOptions> => {
     filterMaxDurationSec: null,
     filterTitleIncludes: [],
     filterTitleExcludes: [],
+    concurrency: DEFAULT_BULK_CONCURRENCY,
+    maxVideos: null,
   };
   outro(OUTRO_MESSAGE);
   return interactiveOptions;

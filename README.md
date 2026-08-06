@@ -4,7 +4,57 @@
 
 Tiny [TypeScript](https://www.typescriptlang.org/) / [Node.js](https://nodejs.org/en) CLI that downloads public [YouTube](https://www.youtube.com/) captions — for a **video**, **playlist**, **channel**, or **channel Shorts** — and optionally pipes the transcript into a **local coding agent** to scaffold portable [`SKILL.md`](https://agentskills.io/specification) packages.
 
-Not a second [yt-dlp](https://github.com/yt-dlp/yt-dlp). That project is the full media Swiss-army knife. This is a small, captions-only tool (focused `src/` modules) for fast public scrapes and skill scaffolding.
+Not a second [yt-dlp](https://github.com/yt-dlp/yt-dlp). That project is the full media Swiss-army knife across thousands of sites. This is a **YouTube-only**, captions-focused CLI: Innertube-first extraction, bulk concurrency, optional local-agent skill scaffolding.
+
+## Why this (vs yt-dlp / other tools)
+
+| Job | Prefer |
+| --- | --- |
+| Download video/audio, mux, thousands of sites | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |
+| **Fast public YouTube captions** (video / playlist / channel) | **this tool** |
+| Tiny library `fetchTranscript(id)` in app code | [youtube-transcript](https://www.npmjs.com/package/youtube-transcript) (often rate-limited / captcha) |
+| Full Innertube client as a dependency | [youtubei.js](https://github.com/LuanRT/YouTube.js) (library, not a captions CLI) |
+
+**YouTube captions path (this tool):** skip watch HTML when possible → sticky Innertube player client (usually `android`) → download one language → optional concurrent bulk workers. That is narrower than yt-dlp and usually **faster for this job**.
+
+### Benchmarks (live, captions only, no agent)
+
+Measured on a laptop against a **generic public video** and a small playlist. Times are wall-clock; re-run with `bash scripts/bench-captions.sh` (set `VIDEO_ID=` / `PLAYLIST_URL=` as needed).
+
+**Single video** — [`dQw4w9WgXcQ`](https://www.youtube.com/watch?v=dQw4w9WgXcQ) (Rick Astley — *Never Gonna Give You Up*), `lang=en` + auto captions, 3 runs each:
+
+| Tool | Run 1 | Run 2 | Run 3 | Median | vs this |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **yt-captions-mini-ai** (Innertube-first) | 1.55s | 1.63s | 1.70s | **1.63s** | 1× |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) `2026.07.04` (`--skip-download --write-auto-subs --sub-langs en`) | 3.80s | 4.26s | 3.92s | **3.92s** | **~2.4× slower** |
+| Previous HTML-first path (same repo, pre-fast-path) | 14.4s | 14.9s | 14.3s | **14.5s** | **~8.9× slower** |
+
+**Bulk** — 6 playlist videos, English captions only:
+
+| Tool | Time | Files written | Notes |
+| --- | ---: | ---: | --- |
+| **this tool** `concurrency=8 max-videos=6` | **2.67s** | **6/6** | sticky player client + parallel workers |
+| **this tool** `concurrency=1 max-videos=6` | 4.98s | 6/6 | serial fast path |
+| yt-dlp `-N 8 --playlist-end 6 --sub-langs en` | 16.0s | 4 (exit 1) | extra work + private items in that list |
+
+**Other OSS (same video, same machine):**
+
+| Package | Result |
+| --- | --- |
+| [youtube-transcript](https://www.npmjs.com/package/youtube-transcript) (npm) | Failed with YouTube captcha / too-many-requests (~0.8s fail-fast) — fine as a library demo, not a bulk CLI |
+
+Fairness notes:
+
+- yt-dlp compared with **one language** (`en`), not `en.*` (which downloads dozens of tracks and 429s hard).
+- This tool does **not** download video/audio; neither side was timed on media.
+- Network variance applies; medians above are representative, not a lab guarantee.
+
+Reproduce:
+
+```bash
+# Single video vs previous path (if you still have main checked out) + yt-dlp
+VIDEO_ID=dQw4w9WgXcQ BULK_N=6 bash scripts/bench-captions.sh
+```
 
 ## Quick start
 
@@ -22,11 +72,11 @@ npm install
 # Single video
 npm start -- url=https://www.youtube.com/watch?v=dQw4w9WgXcQ output-format=txt auto
 
-# Playlist
-npm start -- url=https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID output-format=txt auto
+# Playlist (parallel workers; cap count for a quick scrape)
+npm start -- url=https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID output-format=txt auto concurrency=8 max-videos=20
 
 # Entire channel (Videos tab) → scraped-yt/channel-<name>/
-npm start -- url=https://www.youtube.com/@handle output-format=txt auto
+npm start -- url=https://www.youtube.com/@handle output-format=txt auto concurrency=8
 
 # Channel Shorts tab → scraped-yt/shorts-<name>/
 npm start -- url=https://www.youtube.com/@handle/shorts output-format=txt auto
@@ -83,6 +133,8 @@ npm start   # interactive prompts when no args
 | `out-dir=` | Output directory | `./scraped-yt` |
 | `stdout` | Print instead of writing files | off |
 | `cookies=` | Optional Netscape `cookies.txt` for public session cookies | none |
+| `concurrency=` | Parallel video workers for playlist/channel (`1`–`32`) | `4` |
+| `max-videos=` | Cap how many bulk videos to process | unlimited |
 | `agent=` | Local agent for skill scaffold | none |
 | `model=` | Agent model id (`-m` / `--model`) | agent CLI default |
 | `reasoning-effort=` | `low` \| `medium` \| `high` (when agent supports it) | none |
@@ -105,12 +157,15 @@ Scripts: `npm run typecheck` · `npm run build` · `npm start -- url=...`
 
 Stack: [Effect](https://effect.website/), [@clack/prompts](https://github.com/bombshell-dev/clack).
 
-## Resilience (captions path)
+## Resilience & speed (YouTube captions path)
 
-Inspired by [yt-dlp](https://github.com/yt-dlp/yt-dlp) client rotation — captions-only:
+YouTube-only, captions-only (client ideas inspired by [yt-dlp](https://github.com/yt-dlp/yt-dlp)):
 
-- Watch-page **429** does not hard-fail; multi-client Innertube player is tried next
-- Clients: `android_vr` → `android` → `ios` → `tv` → `mweb` → `web` → `web_embedded`
+- **Innertube-first** — call `youtubei/v1/player` before fetching watch HTML
+- **Sticky last-good client** — after the first hit, reuse that client for the rest of the process
+- **Preferred order** — `android` → `ios` → `web` → `mweb` → `tv` → `android_vr` → `web_embedded`
+- **HTML fallback** only when player returns no tracks
+- **Bulk workers** — `concurrency=` for playlist/channel; `max-videos=` to cap work
 - HTTP retries on 429/502/503/504 with backoff and `Retry-After`
 - Optional Netscape cookies + in-process `Set-Cookie` jar
 
