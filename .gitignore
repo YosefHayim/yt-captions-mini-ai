@@ -3,3 +3,4 @@ dist/
 scraped-yt/
 scraped-yt/**
 .DS_Store
+node_modules/
