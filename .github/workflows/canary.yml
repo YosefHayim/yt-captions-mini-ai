@@ -1,0 +1,82 @@
+name: canary
+
+on:
+  schedule:
+    # Nightly 06:17 UTC
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - '.github/workflows/canary.yml'
+      - 'package.json'
+
+jobs:
+  youtube-captions-canary:
+    name: 3 public videos (native extractor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Canary video 1 (dQw4w9WgXcQ)
+        run: |
+          node dist/main.js \
+            url=https://www.youtube.com/watch?v=dQw4w9WgXcQ \
+            lang=en auto output-format=txt \
+            out-dir=./scraped-yt-canary concurrency=1 no-cache
+
+      - name: Canary video 2 (9bZkp7q19f0)
+        run: |
+          node dist/main.js \
+            url=https://www.youtube.com/watch?v=9bZkp7q19f0 \
+            lang=en auto output-format=txt \
+            out-dir=./scraped-yt-canary concurrency=1 no-cache
+
+      - name: Canary video 3 (iQyg-KypKAA)
+        run: |
+          node dist/main.js \
+            url=https://www.youtube.com/watch?v=iQyg-KypKAA \
+            lang=en auto output-format=txt \
+            out-dir=./scraped-yt-canary concurrency=1 no-cache
+
+      - name: Write canary status artifact
+        if: always()
+        run: |
+          mkdir -p status
+          FILE_COUNT=$(find scraped-yt-canary -type f -name '*.txt' 2>/dev/null | wc -l | tr -d ' ')
+          OK=false
+          if [ "$FILE_COUNT" -ge 3 ]; then OK=true; fi
+          cat > status/canary.json <<EOF
+          {
+            "ok": $OK,
+            "checkedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "files": $FILE_COUNT,
+            "videos": ["dQw4w9WgXcQ", "9bZkp7q19f0", "iQyg-KypKAA"],
+            "workflow": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+          echo "canary files=$FILE_COUNT ok=$OK"
+          cat status/canary.json
+
+      - name: Upload canary status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-status
+          path: |
+            status/canary.json
+            scraped-yt-canary/

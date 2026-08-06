@@ -1,4 +1,5 @@
 import { Duration, Effect, Option, Schema } from 'effect';
+import { Agent, setGlobalDispatcher } from 'undici';
 import { getSessionCookieHeader, rememberSetCookieHeaders } from './cookies.js';
 import type { OptionalFetchBody } from './types.js';
 
@@ -32,6 +33,39 @@ const {
   BASE_RETRY_DELAY_MS,
   MAX_RETRY_DELAY_MS,
 } = CONSTANTS.http;
+
+// Keep-alive pool for repeated youtube.com / innertube hits in bulk runs.
+const httpKeepAliveAgent = new Agent({
+  connections: 32,
+  pipelining: 1,
+  keepAliveTimeout: 30_000,
+  keepAliveMaxTimeout: 60_000,
+});
+setGlobalDispatcher(httpKeepAliveAgent);
+
+// Rolling 429 counters for adaptive bulk concurrency (AIMD).
+let http429HitCount = 0;
+let httpSuccessHitCount = 0;
+
+export const getHttpThrottleStats = (): { hit429: number; hitSuccess: number } => ({
+  hit429: http429HitCount,
+  hitSuccess: httpSuccessHitCount,
+});
+
+export const resetHttpThrottleStats = (): void => {
+  http429HitCount = 0;
+  httpSuccessHitCount = 0;
+};
+
+const recordHttpStatus = (statusCode: number): void => {
+  if (statusCode === HTTP_STATUS_TOO_MANY_REQUESTS) {
+    http429HitCount += 1;
+    return;
+  }
+  if (statusCode >= HTTP_STATUS_SUCCESS_START && statusCode < HTTP_STATUS_REDIRECT_START) {
+    httpSuccessHitCount += 1;
+  }
+};
 
 // Plain header bag used for merges before fetch.
 type HeaderDictionary = Record<string, string>;
@@ -178,6 +212,7 @@ const fetchWithRetryEffect = (
         catch: (fetchError) => (fetchError instanceof Error ? fetchError : new Error(String(fetchError))),
       });
       captureReplyCookies(fetchReply);
+      recordHttpStatus(fetchReply.status);
 
       if (!isRetryableStatus(fetchReply.status)) {
         return fetchReply;

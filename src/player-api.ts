@@ -1,6 +1,13 @@
 import { Effect, Schema } from 'effect';
 import { parseTracksFromPayload } from './captions.js';
+import {
+  applyClientOverrides,
+  getPreferredClientOrder,
+  getRaceClientCount,
+  loadPlayerClientConfig,
+} from './client-config.js';
 import { fetchJsonResource } from './http.js';
+import { attachPoTokenToPlayerBody, resolveOptionalPoToken } from './po-token.js';
 import { YoutubeCaptionTrack } from './types.js';
 import { logInfo, logWarn } from './log.js';
 
@@ -422,9 +429,10 @@ const requestCaptionTracksWithProfile = async (
   signatureTimestamp: number | null,
   webClientVersionOverride: string | null,
   playerConfig: YoutubePlayerConfig | null,
+  poToken: string | null,
 ): Promise<YoutubeCaptionTrack[]> => {
   const clientVersion = resolveClientVersion(clientProfile, webClientVersionOverride);
-  const playerRequestBody = createPlayerRequestBody(
+  const basePlayerBody = createPlayerRequestBody(
     videoId,
     clientProfile,
     languageHint,
@@ -432,6 +440,7 @@ const requestCaptionTracksWithProfile = async (
     signatureTimestamp,
     webClientVersionOverride,
   );
+  const playerRequestBody = attachPoTokenToPlayerBody(basePlayerBody, poToken);
   const playerApiUrl = createPlayerApiUrl(
     clientProfile.innertubeHost,
     resolveApiKey(clientProfile, playerConfig),
@@ -444,11 +453,14 @@ const requestCaptionTracksWithProfile = async (
   return parseTracksFromPayload(playerApiResponse);
 };
 
-const orderPlayerClientProfiles = (): PlayerClientProfile[] => {
+const orderPlayerClientProfiles = async (): Promise<PlayerClientProfile[]> => {
   // 1) Prefer sticky last-good client for subsequent videos in the same process.
-  // 2) Otherwise walk PREFERRED_CLIENT_ORDER (android first — usually has tracks).
+  // 2) Otherwise walk preferred order from config (android first by default).
+  const clientConfig = await loadPlayerClientConfig();
+  const preferredOrder = await getPreferredClientOrder();
+  const configuredProfiles = applyClientOverrides(PLAYER_CLIENT_PROFILES, clientConfig);
   const profilesByLabel = new Map(
-    PLAYER_CLIENT_PROFILES.map((clientProfile) => [clientProfile.profileLabel, clientProfile]),
+    configuredProfiles.map((clientProfile) => [clientProfile.profileLabel, clientProfile]),
   );
   const orderedProfiles: PlayerClientProfile[] = [];
   const seenLabels = new Set<string>();
@@ -468,13 +480,54 @@ const orderPlayerClientProfiles = (): PlayerClientProfile[] => {
   if (stickyPlayerClientLabel) {
     pushProfileLabel(stickyPlayerClientLabel);
   }
+  for (const preferredLabel of preferredOrder) {
+    pushProfileLabel(preferredLabel);
+  }
   for (const preferredLabel of PREFERRED_CLIENT_ORDER) {
     pushProfileLabel(preferredLabel);
   }
-  for (const clientProfile of PLAYER_CLIENT_PROFILES) {
+  for (const clientProfile of configuredProfiles) {
     pushProfileLabel(clientProfile.profileLabel);
   }
   return orderedProfiles;
+};
+
+const tryOnePlayerClient = async (
+  videoId: string,
+  watchUrl: string,
+  clientProfile: PlayerClientProfile,
+  languageHint: string,
+  regionHint: string,
+  signatureTimestamp: number | null,
+  webClientVersionOverride: string | null,
+  playerConfig: YoutubePlayerConfig | null,
+  poToken: string | null,
+): Promise<YoutubeCaptionTrack[] | null> => {
+  try {
+    const captionTracks = await requestCaptionTracksWithProfile(
+      videoId,
+      watchUrl,
+      clientProfile,
+      languageHint,
+      regionHint,
+      signatureTimestamp,
+      webClientVersionOverride,
+      playerConfig,
+      poToken,
+    );
+    if (captionTracks.length > 0) {
+      return captionTracks;
+    }
+    logWarn(
+      `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ${LOG_CLIENT_EMPTY}`,
+    );
+    return null;
+  } catch (clientError) {
+    logWarn(
+      `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ${LOG_CLIENT_FAILED}: ${String(clientError)}`,
+    );
+    return null;
+  }
 };
 
 export const fetchTracksFromPlayerApi = async (
@@ -487,42 +540,75 @@ export const fetchTracksFromPlayerApi = async (
   const languageHint = getLanguageHint(playerConfig);
   const regionHint = getPlaybackRegion(playerConfig);
   const webClientVersionOverride = playerConfig?.INNERTUBE_CONTEXT_CLIENT_VERSION ?? null;
-  const orderedProfiles = orderPlayerClientProfiles();
+  const orderedProfiles = await orderPlayerClientProfiles();
+  const poToken = await resolveOptionalPoToken(videoId);
+  const raceClientCount = stickyPlayerClientLabel ? 1 : await getRaceClientCount();
 
   if (stickyPlayerClientLabel) {
     logInfo(`[${videoId}] ${LOG_STICKY_CLIENT}: ${stickyPlayerClientLabel}`);
   }
 
-  for (let profileIndex = 0; profileIndex < orderedProfiles.length; profileIndex += 1) {
-    const clientProfile = orderedProfiles[profileIndex];
-    try {
-      const captionTracks = await requestCaptionTracksWithProfile(
-        videoId,
-        watchUrl,
-        clientProfile,
-        languageHint,
-        regionHint,
-        signatureTimestamp,
-        webClientVersionOverride,
-        playerConfig,
-      );
-      if (captionTracks.length > 0) {
-        stickyPlayerClientLabel = clientProfile.profileLabel;
-        logInfo(
-          `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ok (${captionTracks.length} tracks)`,
+  // Cold miss: race top N clients; first non-empty tracks win (lower p99).
+  if (!stickyPlayerClientLabel && raceClientCount > 1 && orderedProfiles.length > 1) {
+    const raceProfiles = orderedProfiles.slice(0, Math.min(raceClientCount, orderedProfiles.length));
+    logInfo(
+      `[${videoId}] racing player clients: ${raceProfiles.map((profile) => profile.profileLabel).join(', ')}`,
+    );
+    const raceResults = await Promise.all(
+      raceProfiles.map(async (clientProfile) => {
+        const captionTracks = await tryOnePlayerClient(
+          videoId,
+          watchUrl,
+          clientProfile,
+          languageHint,
+          regionHint,
+          signatureTimestamp,
+          webClientVersionOverride,
+          playerConfig,
+          poToken,
         );
-        return captionTracks;
-      }
-      logWarn(
-        `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ${LOG_CLIENT_EMPTY}`,
+        return { clientProfile, captionTracks };
+      }),
+    );
+    const raceWinner = raceResults.find(
+      (raceResult) => raceResult.captionTracks && raceResult.captionTracks.length > 0,
+    );
+    if (raceWinner?.captionTracks) {
+      stickyPlayerClientLabel = raceWinner.clientProfile.profileLabel;
+      logInfo(
+        `[${videoId}] ${LOG_CLIENT_PREFIX} ${raceWinner.clientProfile.profileLabel} ok (${raceWinner.captionTracks.length} tracks, race)`,
       );
-    } catch (clientError) {
-      logWarn(
-        `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ${LOG_CLIENT_FAILED}: ${String(clientError)}`,
+      return raceWinner.captionTracks;
+    }
+  }
+
+  // Serial walk (after failed race, skip clients already tried in the race).
+  const serialStartIndex =
+    !stickyPlayerClientLabel && raceClientCount > 1
+      ? Math.min(raceClientCount, orderedProfiles.length)
+      : 0;
+
+  for (let profileIndex = serialStartIndex; profileIndex < orderedProfiles.length; profileIndex += 1) {
+    const clientProfile = orderedProfiles[profileIndex];
+    const captionTracks = await tryOnePlayerClient(
+      videoId,
+      watchUrl,
+      clientProfile,
+      languageHint,
+      regionHint,
+      signatureTimestamp,
+      webClientVersionOverride,
+      playerConfig,
+      poToken,
+    );
+    if (captionTracks && captionTracks.length > 0) {
+      stickyPlayerClientLabel = clientProfile.profileLabel;
+      logInfo(
+        `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ok (${captionTracks.length} tracks)`,
       );
+      return captionTracks;
     }
 
-    // Only delay after a miss when more clients remain (sticky hits skip this path).
     if (profileIndex < orderedProfiles.length - 1) {
       await sleepBriefly(CLIENT_ATTEMPT_DELAY_MS);
     }

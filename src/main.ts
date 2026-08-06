@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -13,7 +14,7 @@ import {
   TranscriptBundle,
   YoutubeCaptionTrack,
 } from './types.js';
-import { fetchTextResourceOptional } from './http.js';
+import { fetchTextResourceOptional, getHttpThrottleStats, resetHttpThrottleStats } from './http.js';
 import { extractEmbeddedJson } from './parsing.js';
 import { chooseTrackFromParsedTracks, composeCaptionRequestUrl, parseTracksFromPayload } from './captions.js';
 import { getPlaylistIdFromUrl, isYoutubePlaylistUrl, collectPlaylistVideoIds } from './playlist.js';
@@ -34,6 +35,8 @@ import { requireAgentModel, sanitizeModelFolderName } from './agentModels.js';
 import { loadNetscapeCookieFile } from './cookies.js';
 import { parseSkillPackage, persistSkillPackage } from './skill-output.js';
 import { criteriaFromCliOptions, filterVideoIdsByCriteria } from './video-filters.js';
+import { readTranscriptCache, writeTranscriptCache } from './transcript-cache.js';
+import { extractCaptionsWithYtdlp } from './extractor-ytdlp.js';
 
 import { CONSTANTS } from './constants.js';
 
@@ -319,6 +322,64 @@ const loadCaptionTracksForVideo = async (
   return { captionTracks, pageHtml };
 };
 
+const buildBundleFromYtdlp = async (
+  videoId: string,
+  canonicalWatchUrl: string,
+  options: CliOptions,
+): Promise<TranscriptBundle> => {
+  // Fallback extractor: yt-dlp subs only → convert to requested export format.
+  const languageHint = options.languageTokens[0] ?? 'en';
+  const ytdlpCaption = extractCaptionsWithYtdlp(canonicalWatchUrl, languageHint);
+  if (!ytdlpCaption) {
+    throw new Error(`${LOG_NO_TRACK} ${videoId} (yt-dlp fallback failed)`);
+  }
+  const subtitleDownload: CaptionDownload = {
+    videoId,
+    languageTag: ytdlpCaption.languageTag,
+    fileFormat: 'vtt',
+    fileContent: ytdlpCaption.captionBody,
+  };
+  const exportFormat = options.exportFormat ?? 'txt';
+  const transformedSubtitle = convertCaptionSourceToOutput(subtitleDownload, exportFormat);
+  const outputContent = transformedSubtitle.outputContent.trim();
+  if (!outputContent.length) {
+    throw new Error(`${LOG_EMPTY_OUTPUT} ${videoId}`);
+  }
+  let outputFile: string | null = null;
+  if (options.writeToStdout) {
+    console.log(
+      `${STDOUT_LINE_FEED}--- ${videoId}${FILE_PATH_EXTENSION_SEPARATOR}${ytdlpCaption.languageTag}${FILE_PATH_EXTENSION_SEPARATOR}${transformedSubtitle.outputFormat} ---${STDOUT_LINE_FEED}${outputContent}`,
+    );
+  } else {
+    outputFile = await persistCaptions(
+      options.outDirectory,
+      transformedSubtitle.outputFormat,
+      outputContent,
+      videoId,
+      ytdlpCaption.languageTag,
+    );
+    logInfo(`${LOG_VIDEO_OUTPUT_TEMPLATE} ${outputFile}`);
+  }
+  const plainTranscript = convertCaptionSourceToOutput(subtitleDownload, 'txt').outputContent.trim();
+  return {
+    videoId,
+    videoName: null,
+    videoUrl: `${WATCH_QUERY_PREFIX}${videoId}`,
+    languageTag: ytdlpCaption.languageTag,
+    artifacts: [
+      {
+        videoId,
+        languageTag: ytdlpCaption.languageTag,
+        sourceFormat: 'vtt',
+        outputFormat: transformedSubtitle.outputFormat,
+        outputText: outputContent,
+        outputPath: outputFile,
+      },
+    ],
+    localAgentTranscript: plainTranscript,
+  };
+};
+
 const buildTranscriptBundleFromVideo = async (
   sourceUrl: string,
   options: CliOptions,
@@ -329,6 +390,53 @@ const buildTranscriptBundleFromVideo = async (
   }
 
   const canonicalWatchUrl = getWatchUrl(sourceUrl);
+  const exportFormatKey = options.exportFormat ?? 'txt';
+  const cacheLanguageHint = options.languageTokens[0] ?? 'en';
+
+  // Disk cache hit: skip network when allowed.
+  if (options.useCache && !options.forceRefresh) {
+    const cacheEntry = await readTranscriptCache(videoId, cacheLanguageHint, exportFormatKey);
+    if (cacheEntry) {
+      logInfo(`[${videoId}] cache hit (${cacheEntry.languageTag}/${exportFormatKey})`);
+      let outputFile: string | null = null;
+      if (!options.writeToStdout) {
+        outputFile = await persistCaptions(
+          options.outDirectory,
+          exportFormatKey,
+          cacheEntry.transcriptBody,
+          videoId,
+          cacheEntry.languageTag,
+        );
+        logInfo(`${LOG_VIDEO_OUTPUT_TEMPLATE} ${outputFile}`);
+      } else {
+        console.log(cacheEntry.transcriptBody);
+      }
+      return {
+        videoId,
+        videoName: cacheEntry.videoName,
+        videoUrl: `${WATCH_QUERY_PREFIX}${videoId}`,
+        languageTag: cacheEntry.languageTag,
+        artifacts: [
+          {
+            videoId,
+            languageTag: cacheEntry.languageTag,
+            sourceFormat: 'vtt',
+            outputFormat: exportFormatKey,
+            outputText: cacheEntry.transcriptBody,
+            outputPath: outputFile,
+          },
+        ],
+        localAgentTranscript: cacheEntry.transcriptBody,
+      };
+    }
+  }
+
+  // Explicit yt-dlp-only mode.
+  if (options.extractorMode === 'ytdlp') {
+    return buildBundleFromYtdlp(videoId, canonicalWatchUrl, options);
+  }
+
+  try {
   const trackLoad = await loadCaptionTracksForVideo(videoId, canonicalWatchUrl);
   const pageHtml = trackLoad.pageHtml;
   let discoveredTracks = trackLoad.captionTracks;
@@ -445,7 +553,7 @@ const buildTranscriptBundleFromVideo = async (
   const videoName = await resolveVideoName(pageHtml, canonicalWatchUrl);
   const videoUrl = `${WATCH_QUERY_PREFIX}${videoId}`;
 
-  return {
+  const transcriptBundle: TranscriptBundle = {
     videoId,
     videoName,
     videoUrl,
@@ -453,6 +561,27 @@ const buildTranscriptBundleFromVideo = async (
     artifacts: transcriptArtifacts,
     localAgentTranscript,
   };
+
+  if (options.useCache && localAgentTranscript.length > 0) {
+    await writeTranscriptCache({
+      videoId,
+      languageTag: transcriptBundle.languageTag,
+      exportFormat: exportFormatKey,
+      transcriptBody: localAgentTranscript,
+      videoName,
+      cachedAt: new Date().toISOString(),
+    });
+  }
+
+  return transcriptBundle;
+  } catch (nativeError) {
+    if (options.extractorMode === 'native') {
+      throw nativeError;
+    }
+    // auto mode: native failed → yt-dlp fallback when installed.
+    logWarn(`[${videoId}] native extractor failed; trying yt-dlp: ${String(nativeError)}`);
+    return buildBundleFromYtdlp(videoId, canonicalWatchUrl, options);
+  }
 };
 
 const runAndPersistAgent = async (options: CliOptions, bundle: TranscriptBundle): Promise<void> => {
@@ -579,21 +708,41 @@ const processVideoIdList = async (
   if (cappedVideoIds.length !== videoIds.length) {
     logInfo(`max-videos: using ${cappedVideoIds.length} of ${videoIds.length}`);
   }
-  logInfo(`${LOG_BULK_CONCURRENCY} ${effectiveConcurrency}`);
+  logInfo(`${LOG_BULK_CONCURRENCY} ${effectiveConcurrency} (adaptive on 429)`);
 
-  await runVideoWorkers(cappedVideoIds, effectiveConcurrency, async (videoId, index) => {
-    logInfo(`[#${index + VIDEO_INDEX_OFFSET}/${cappedVideoIds.length}] ${LOG_VIDEO_PROGRESS} ${videoId}`);
-    try {
-      const bundle = await buildTranscriptBundleFromVideo(`${WATCH_QUERY_PREFIX}${videoId}`, runOptions);
-      await runAndPersistAgent(runOptions, bundle);
-    } catch (downloadError) {
-      logWarn(`${LOG_PLAYLIST_VIDEO_SKIPPED} ${videoId}: ${String(downloadError)}`);
+  // AIMD waves: shrink window after 429s, grow slowly when clean.
+  let windowSize = effectiveConcurrency;
+  let videoCursor = 0;
+  while (videoCursor < cappedVideoIds.length) {
+    resetHttpThrottleStats();
+    const waveVideoIds = cappedVideoIds.slice(videoCursor, videoCursor + windowSize);
+    await runVideoWorkers(waveVideoIds, waveVideoIds.length, async (videoId, waveIndex) => {
+      const absoluteIndex = videoCursor + waveIndex;
+      logInfo(
+        `[#${absoluteIndex + VIDEO_INDEX_OFFSET}/${cappedVideoIds.length}] ${LOG_VIDEO_PROGRESS} ${videoId}`,
+      );
+      try {
+        const bundle = await buildTranscriptBundleFromVideo(
+          `${WATCH_QUERY_PREFIX}${videoId}`,
+          runOptions,
+        );
+        await runAndPersistAgent(runOptions, bundle);
+      } catch (downloadError) {
+        logWarn(`${LOG_PLAYLIST_VIDEO_SKIPPED} ${videoId}: ${String(downloadError)}`);
+      }
+    });
+    const throttleStats = getHttpThrottleStats();
+    if (throttleStats.hit429 > 0) {
+      windowSize = Math.max(1, Math.floor(windowSize / 2));
+      logWarn(`adaptive concurrency → ${windowSize} after ${throttleStats.hit429} HTTP 429s`);
+    } else if (windowSize < effectiveConcurrency) {
+      windowSize = Math.min(effectiveConcurrency, windowSize + 1);
     }
-    // Serial mode: small gap to reduce 429s. Concurrent mode: no artificial delay.
-    if (effectiveConcurrency === 1) {
+    videoCursor += waveVideoIds.length;
+    if (windowSize === 1 && videoCursor < cappedVideoIds.length) {
       await new Promise((wakeUp) => setTimeout(wakeUp, SERIAL_VIDEO_DELAY_MS));
     }
-  });
+  }
 };
 
 const runForPlaylistUrl = async (playlistUrl: string, options: CliOptions): Promise<void> => {
