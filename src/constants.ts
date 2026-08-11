@@ -149,6 +149,7 @@ export const CONSTANTS = {
     OPTION_BOOLEAN_HELP: 'help',
     OPTION_BOOLEAN_NO_CACHE: 'no-cache',
     OPTION_BOOLEAN_FORCE: 'force',
+    OPTION_BOOLEAN_DOWNLOAD: 'download',
     NONE_AGENT_VALUE: 'none',
     CLI_OPTION_SEPARATOR: ',',
     BOOLEAN_TRUE: 'true',
@@ -185,7 +186,7 @@ export const CONSTANTS = {
     LABEL_CLI_DEFAULT_MODEL: 'CLI default (no -m)',
     LABEL_SKIP_REASONING_EFFORT: 'Skip (CLI default effort)',
     USAGE_TEXT:
-      'Usage: ytcap url=<youtube-url|@channel|playlist|video-id> [format=vtt,srt] [lang=en] [auto] [stdout] [out-dir=./scraped-yt] [output-format=txt|md|json|jsonl] [cookies=./cookies.txt] [concurrency=4] [max-videos=N] [extractor=auto|native|ytdlp] [no-cache] [force] [since=YYYY-MM-DD] [until=YYYY-MM-DD] [min-duration=SEC] [max-duration=SEC] [title-includes=a,b] [title-excludes=x] [agent=…] [model=<id>] [reasoning-effort=high|medium|low] [system-prompt="..."]',
+      'Usage: ytcap url=<youtube-url|@channel|playlist|video-id> [format=vtt,srt] [lang=en] [auto] [stdout] [download] [out-dir=./scraped-yt] [output-format=txt|md|json|jsonl] [cookies=./cookies.txt] [concurrency=4] [max-videos=N] [extractor=auto|native|ytdlp] [no-cache] [force] [since=YYYY-MM-DD] [until=YYYY-MM-DD] [min-duration=SEC] [max-duration=SEC] [title-includes=a,b] [title-excludes=x] [agent=…] [model=<id>] [reasoning-effort=high|medium|low] [system-prompt="..."]',
     DEFAULT_BULK_CONCURRENCY: 4,
     MIN_BULK_CONCURRENCY: 1,
     MAX_BULK_CONCURRENCY: 32,
@@ -274,6 +275,14 @@ export const CONSTANTS = {
     LOG_WATCH_HTML_SKIPPED: 'watch HTML unavailable; using multi-client player API',
     LOG_COOKIES_LOADED: 'Loaded Netscape cookies:',
     LOG_VIDEO_OUTPUT_TEMPLATE: 'Saved subtitles:',
+    LOG_VIDEO_DOWNLOAD_START: 'downloading stream',
+    LOG_VIDEO_DOWNLOAD_DONE: 'downloaded',
+    LOG_VIDEO_PROGRESS_TEMPLATE: 'video download progress',
+    LOG_VIDEO_SAVED_TEMPLATE: 'Saved video:',
+    LOG_VIDEO_MUXING: 'muxing audio + video with ffmpeg',
+    LOG_VIDEO_MUX_TEMPLATE: 'Saved video (muxed):',
+    LOG_VIDEO_NO_FORMATS: 'No playable mp4 stream found for',
+    LOG_VIDEO_SINGLE_ONLY: 'download mode supports a single video URL only (no playlist/channel)',
     LOG_AGENT_OUTPUT_TEMPLATE: 'Saved skill package file:',
     LOG_AGENT_CAPTION_TEMPLATE: 'Saved agent caption copy:',
     LOG_AGENT_METRICS_TEMPLATE: 'Saved agent metrics:',
@@ -313,8 +322,10 @@ export const CONSTANTS = {
     DEFAULT_IOS_API_KEY: 'AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc',
     LOG_CLIENT_PREFIX: 'player client',
     LOG_CLIENT_EMPTY: 'returned no caption tracks',
+    LOG_CLIENT_NO_STREAMS: 'returned no streaming formats',
     LOG_CLIENT_FAILED: 'failed',
     LOG_STICKY_CLIENT: 'sticky player client',
+    LOG_VISITOR_BOOTSTRAP: 'visitorData attached (adaptive stream URLs unlocked)',
     // Prefer the client that usually returns tracks first (android before android_vr).
     PREFERRED_CLIENT_ORDER: [
       'android',
@@ -325,6 +336,22 @@ export const CONSTANTS = {
       'android_vr',
       'web_embedded',
     ],
+  },
+
+  video: {
+    MIME_VIDEO_PREFIX: 'video/',
+    MIME_AUDIO_PREFIX: 'audio/',
+    MIME_MP4_MARK: 'mp4',
+    PROGRESS_LOG_STEP_PERCENT: 10,
+    FFMPEG_BINARY_NAME: 'ffmpeg',
+    FFMPEG_TIMEOUT_MS: 600_000,
+    MEDIA_EXTENSION_MP4: '.mp4',
+    MEDIA_EXTENSION_PART_VIDEO: '.video.mp4',
+    MEDIA_EXTENSION_PART_AUDIO: '.m4a',
+    RANGE_HEADER_NAME: 'Range',
+    RANGE_BYTES_FROM_ZERO: 'bytes=0-',
+    // Parallel bounded requests dodge the per-connection CDN throttle (~1 Mbps).
+    MEDIA_PARALLEL_CHUNKS: 6,
   },
 
   playlist: {
