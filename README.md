@@ -5,18 +5,19 @@
 [![canary](https://github.com/YosefHayim/yt-captions-mini-ai/actions/workflows/canary.yml/badge.svg)](https://github.com/YosefHayim/yt-captions-mini-ai/actions/workflows/canary.yml)
 [![ci](https://github.com/YosefHayim/yt-captions-mini-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/YosefHayim/yt-captions-mini-ai/actions/workflows/ci.yml)
 
-Tiny [TypeScript](https://www.typescriptlang.org/) / [Node.js](https://nodejs.org/en) CLI that downloads public [YouTube](https://www.youtube.com/) captions — for a **video**, **playlist**, **channel**, or **channel Shorts** — and optionally pipes the transcript into a **local coding agent** to scaffold portable [`SKILL.md`](https://agentskills.io/specification) packages.
+Tiny [TypeScript](https://www.typescriptlang.org/) / [Node.js](https://nodejs.org/en) CLI that downloads public [YouTube](https://www.youtube.com/) captions — for a **video**, **playlist**, **channel**, or **channel Shorts** — downloads a **video as mp4**, and optionally pipes the transcript into a **local coding agent** to scaffold portable [`SKILL.md`](https://agentskills.io/specification) packages.
 
 **Binary:** `ytcap` (alias `yt-captions-mini-ai`).
 
-Not a second [yt-dlp](https://github.com/yt-dlp/yt-dlp). That project is the full media Swiss-army knife across thousands of sites. This is a **YouTube-only**, captions-focused CLI: Innertube-first extraction, bulk concurrency, disk cache, optional yt-dlp fallback, local-agent skill scaffolding.
+Not a second [yt-dlp](https://github.com/yt-dlp/yt-dlp). That project is the full media Swiss-army knife across thousands of sites. This is a **YouTube-only**, captions-focused CLI: Innertube-first extraction, bulk concurrency, disk cache, optional yt-dlp fallback, local-agent skill scaffolding, and a native single-video mp4 download.
 
 ## When to use us vs yt-dlp
 
 | Job | Prefer |
 | --- | --- |
-| Download video/audio, mux, thousands of sites | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |
+| Multi-format media, muxing, thousands of sites | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |
 | **Fast public YouTube captions** (video / playlist / channel) | **this tool** |
+| **Native single-video mp4 download** (public videos, `download` flag) | **this tool** |
 | Tiny library `fetchTranscript(id)` in app code | [youtube-transcript](https://www.npmjs.com/package/youtube-transcript) (often rate-limited / captcha) |
 | Full Innertube client as a dependency | [youtubei.js](https://github.com/LuanRT/YouTube.js) (library, not a captions CLI) |
 
@@ -51,7 +52,7 @@ Measured on a laptop against a **generic public video** and a small playlist. Ti
 Fairness notes:
 
 - yt-dlp compared with **one language** (`en`), not `en.*` (which downloads dozens of tracks and 429s hard).
-- This tool does **not** download video/audio; neither side was timed on media.
+- These tables time **captions only**; `download` mode moves media and is not covered here.
 - Network variance applies; medians above are representative, not a lab guarantee.
 
 Reproduce:
@@ -101,6 +102,20 @@ ytcap url=dQw4w9WgXcQ lang=en auto force output-format=txt
 # Optional yt-dlp fallback (yt-dlp must be on PATH)
 ytcap url=VIDEO_ID lang=en auto extractor=auto
 ```
+
+### Video download (native, single video)
+
+```bash
+# Download the video as mp4 → scraped-yt/<videoId>.mp4
+ytcap url=https://www.youtube.com/watch?v=VIDEO_ID download
+
+# Custom folder
+ytcap url=VIDEO_ID download out-dir=./downloads
+```
+
+Downloads through the same Innertube player API as captions — no yt-dlp. Quality selection tries the **best mp4 video + best mp4 audio** (muxed via `ffmpeg`, H.264 preferred so system players can open it), and falls back to the **combined mp4** stream when YouTube refuses the adaptive streams.
+
+> **Quality note:** adaptive (video-only/audio-only) streams are unlocked natively by attaching a fresh `visitorData` from the player's `android` response to an `android_vr` player request — no `PO token` needed. That serves the full adaptive ladder (up to the video's max mp4 resolution, e.g. 1080p), and downloads split into parallel bounded-range chunks to stay off the CDN's per-connection throttle. `YT_CAP_PO_TOKEN` (or `YT_CAP_PO_TOKEN_COMMAND`) remain a documented fallback if YouTube starts requiring pot.
 
 ### Skill scaffold (captions → local agent)
 
@@ -156,6 +171,7 @@ npm start   # interactive prompts when no args
 | `concurrency=` | Parallel video workers for playlist/channel (`1`–`32`); AIMD shrink on 429 | `4` |
 | `max-videos=` | Cap how many bulk videos to process | unlimited |
 | `extractor=` | `auto` (native→yt-dlp), `native`, `ytdlp` | `auto` |
+| `download` | Download the video as mp4 (single video; native player API) | off |
 | `no-cache` | Disable disk transcript cache | off (cache on) |
 | `force` | Bypass cache and refresh from YouTube | off |
 | `agent=` | Local agent for skill scaffold | none |
@@ -208,10 +224,11 @@ YouTube-only, captions-only (client ideas inspired by [yt-dlp](https://github.co
 - Single video, playlist (first-page playlist state + channel browse continuations)
 - Channel **Videos** and **Shorts** tabs with bulk folders
 - Optional local-agent skill packaging + run metrics JSON
+- **Native single-video mp4 download** (combined stream, or adaptive pair muxed via `ffmpeg`; `visitorData` bootstrap unlocks full quality, parallel chunks beat the CDN throttle)
 
 **Out of scope**
 
-- Video/audio download, merge, or private/members content (use [yt-dlp](https://github.com/yt-dlp/yt-dlp))
+- Playlist/channel media download, format conversion (beyond mp4 mux), or private/members content (use [yt-dlp](https://github.com/yt-dlp/yt-dlp))
 - Cloud caption APIs or hosted services
 - Installing or replacing agent products — this only **invokes** CLIs already on `PATH`
 - GUI
