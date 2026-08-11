@@ -2,5 +2,5 @@ node_modules/
 dist/
 scraped-yt/
 scraped-yt/**
+.worktrees/
 .DS_Store
-node_modules/

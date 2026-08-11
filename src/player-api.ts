@@ -37,8 +37,10 @@ const {
   DEFAULT_IOS_API_KEY,
   LOG_CLIENT_PREFIX,
   LOG_CLIENT_EMPTY,
+  LOG_CLIENT_NO_STREAMS,
   LOG_CLIENT_FAILED,
   LOG_STICKY_CLIENT,
+  LOG_VISITOR_BOOTSTRAP,
   PREFERRED_CLIENT_ORDER,
 } = CONSTANTS.playerApi;
 
@@ -53,7 +55,7 @@ const {
 } = CONSTANTS.http;
 
 // Static Innertube client profile inspired by yt-dlp client table.
-type PlayerClientProfile = {
+export type PlayerClientProfile = {
   // Short label for logs.
   profileLabel: string;
   // Host used for the player POST (www / music).
@@ -361,6 +363,7 @@ const createPlayerRequestBody = (
   regionHint: string,
   signatureTimestamp: number | null,
   webClientVersionOverride: string | null,
+  visitorData: string | null,
 ): Record<string, unknown> => {
   const clientContext: Record<string, unknown> = {
     hl: languageHint,
@@ -370,6 +373,10 @@ const createPlayerRequestBody = (
     userAgent: clientProfile.userAgent,
     ...clientProfile.extraClientFields,
   };
+  if (visitorData) {
+    // Attaching a fresh visitorData makes YouTube serve adaptive stream URLs directly.
+    clientContext.visitorData = visitorData;
+  }
 
   const requestContext: Record<string, unknown> = {
     client: clientContext,
@@ -410,15 +417,56 @@ const composePlayerApiHeaders = (
   clientProfile: PlayerClientProfile,
   watchUrl: string,
   clientVersion: string,
-): Record<string, string> => ({
-  [CONTENT_TYPE_HEADER]: CONTENT_TYPE_JSON,
-  Origin: `https://${clientProfile.innertubeHost}`,
-  Referer: watchUrl,
-  [USER_AGENT_HEADER]: clientProfile.userAgent,
-  [ACCEPT_HEADER]: ACCEPT_ALL,
-  'X-Youtube-Client-Name': clientProfile.clientId,
-  'X-Youtube-Client-Version': clientVersion,
-});
+  visitorData: string | null,
+): Record<string, string> => {
+  const playerApiHeaders: Record<string, string> = {
+    [CONTENT_TYPE_HEADER]: CONTENT_TYPE_JSON,
+    Origin: `https://${clientProfile.innertubeHost}`,
+    Referer: watchUrl,
+    [USER_AGENT_HEADER]: clientProfile.userAgent,
+    [ACCEPT_HEADER]: ACCEPT_ALL,
+    'X-Youtube-Client-Name': clientProfile.clientId,
+    'X-Youtube-Client-Version': clientVersion,
+  };
+  if (visitorData) {
+    playerApiHeaders['X-Goog-Visitor-Id'] = visitorData;
+  }
+  return playerApiHeaders;
+};
+
+const requestPlayerPayloadWithProfile = async (
+  videoId: string,
+  watchUrl: string,
+  clientProfile: PlayerClientProfile,
+  languageHint: string,
+  regionHint: string,
+  signatureTimestamp: number | null,
+  webClientVersionOverride: string | null,
+  playerConfig: YoutubePlayerConfig | null,
+  poToken: string | null,
+  visitorData: string | null,
+): Promise<unknown> => {
+  const clientVersion = resolveClientVersion(clientProfile, webClientVersionOverride);
+  const basePlayerBody = createPlayerRequestBody(
+    videoId,
+    clientProfile,
+    languageHint,
+    regionHint,
+    signatureTimestamp,
+    webClientVersionOverride,
+    visitorData,
+  );
+  const playerRequestBody = attachPoTokenToPlayerBody(basePlayerBody, poToken);
+  const playerApiUrl = createPlayerApiUrl(
+    clientProfile.innertubeHost,
+    resolveApiKey(clientProfile, playerConfig),
+  );
+
+  return fetchJsonResource<unknown>(playerApiUrl, playerRequestBody, {
+    method: 'POST',
+    headers: composePlayerApiHeaders(clientProfile, watchUrl, clientVersion, visitorData),
+  });
+};
 
 const requestCaptionTracksWithProfile = async (
   videoId: string,
@@ -430,27 +478,78 @@ const requestCaptionTracksWithProfile = async (
   webClientVersionOverride: string | null,
   playerConfig: YoutubePlayerConfig | null,
   poToken: string | null,
+  visitorData: string | null,
 ): Promise<YoutubeCaptionTrack[]> => {
-  const clientVersion = resolveClientVersion(clientProfile, webClientVersionOverride);
-  const basePlayerBody = createPlayerRequestBody(
+  const playerPayload = await requestPlayerPayloadWithProfile(
     videoId,
+    watchUrl,
     clientProfile,
     languageHint,
     regionHint,
     signatureTimestamp,
     webClientVersionOverride,
+    playerConfig,
+    poToken,
+    visitorData,
   );
-  const playerRequestBody = attachPoTokenToPlayerBody(basePlayerBody, poToken);
-  const playerApiUrl = createPlayerApiUrl(
-    clientProfile.innertubeHost,
-    resolveApiKey(clientProfile, playerConfig),
-  );
+  return parseTracksFromPayload(playerPayload);
+};
 
-  const playerApiResponse = await fetchJsonResource<unknown>(playerApiUrl, playerRequestBody, {
-    method: 'POST',
-    headers: composePlayerApiHeaders(clientProfile, watchUrl, clientVersion),
-  });
-  return parseTracksFromPayload(playerApiResponse);
+const hasUsableStreamingData = (playerPayload: unknown): boolean => {
+  // Streaming formats (progressive `formats` or `adaptiveFormats`) mean a playable media set exists.
+  if (!playerPayload || typeof playerPayload !== 'object' || Array.isArray(playerPayload)) {
+    return false;
+  }
+  const streamingData = (playerPayload as Record<string, unknown>).streamingData;
+  if (!streamingData || typeof streamingData !== 'object' || Array.isArray(streamingData)) {
+    return false;
+  }
+  const streamingDataObject = streamingData as Record<string, unknown>;
+  const progressiveFormats = streamingDataObject.formats;
+  const adaptiveFormats = streamingDataObject.adaptiveFormats;
+  const hasProgressiveFormats = Array.isArray(progressiveFormats) && progressiveFormats.length > 0;
+  const hasAdaptiveFormats = Array.isArray(adaptiveFormats) && adaptiveFormats.length > 0;
+  return hasProgressiveFormats || hasAdaptiveFormats;
+};
+
+const tryOnePlayerPayload = async (
+  videoId: string,
+  watchUrl: string,
+  clientProfile: PlayerClientProfile,
+  languageHint: string,
+  regionHint: string,
+  signatureTimestamp: number | null,
+  webClientVersionOverride: string | null,
+  playerConfig: YoutubePlayerConfig | null,
+  poToken: string | null,
+  visitorData: string | null,
+): Promise<unknown | null> => {
+  try {
+    const playerPayload = await requestPlayerPayloadWithProfile(
+      videoId,
+      watchUrl,
+      clientProfile,
+      languageHint,
+      regionHint,
+      signatureTimestamp,
+      webClientVersionOverride,
+      playerConfig,
+      poToken,
+      visitorData,
+    );
+    if (hasUsableStreamingData(playerPayload)) {
+      return playerPayload;
+    }
+    logWarn(
+      `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ${LOG_CLIENT_NO_STREAMS}`,
+    );
+    return null;
+  } catch (clientError) {
+    logWarn(
+      `[${videoId}] ${LOG_CLIENT_PREFIX} ${clientProfile.profileLabel} ${LOG_CLIENT_FAILED}: ${String(clientError)}`,
+    );
+    return null;
+  }
 };
 
 const orderPlayerClientProfiles = async (): Promise<PlayerClientProfile[]> => {
@@ -502,6 +601,7 @@ const tryOnePlayerClient = async (
   webClientVersionOverride: string | null,
   playerConfig: YoutubePlayerConfig | null,
   poToken: string | null,
+  visitorData: string | null,
 ): Promise<YoutubeCaptionTrack[] | null> => {
   try {
     const captionTracks = await requestCaptionTracksWithProfile(
@@ -514,6 +614,7 @@ const tryOnePlayerClient = async (
       webClientVersionOverride,
       playerConfig,
       poToken,
+      visitorData,
     );
     if (captionTracks.length > 0) {
       return captionTracks;
@@ -566,6 +667,7 @@ export const fetchTracksFromPlayerApi = async (
           webClientVersionOverride,
           playerConfig,
           poToken,
+          null,
         );
         return { clientProfile, captionTracks };
       }),
@@ -600,6 +702,7 @@ export const fetchTracksFromPlayerApi = async (
       webClientVersionOverride,
       playerConfig,
       poToken,
+      null,
     );
     if (captionTracks && captionTracks.length > 0) {
       stickyPlayerClientLabel = clientProfile.profileLabel;
@@ -615,6 +718,85 @@ export const fetchTracksFromPlayerApi = async (
   }
 
   return [];
+};
+
+export type PlayerPayloadWithClient = {
+  clientProfile?: PlayerClientProfile;
+  playerPayload: unknown;
+};
+
+export const fetchPlayerPayloadFromPlayerApi = async (
+  watchUrl: string,
+  videoId: string,
+  pageHtml: string | null,
+): Promise<PlayerPayloadWithClient | null> => {
+  const playerConfig = parsePlayerConfig(pageHtml);
+  const signatureTimestamp = parseSignatureTimestamp(playerConfig, pageHtml);
+  const languageHint = getLanguageHint(playerConfig);
+  const regionHint = getPlaybackRegion(playerConfig);
+  const webClientVersionOverride = playerConfig?.INNERTUBE_CONTEXT_CLIENT_VERSION ?? null;
+  const orderedProfiles = await orderPlayerClientProfiles();
+  const poToken = await resolveOptionalPoToken(videoId);
+
+  const walkForPlayerPayload = async (
+    clientProfiles: readonly PlayerClientProfile[],
+    visitorData: string | null,
+  ): Promise<{ clientProfile: PlayerClientProfile; playerPayload: unknown } | null> => {
+    for (const clientProfile of clientProfiles) {
+      const playerPayload = await tryOnePlayerPayload(
+        videoId,
+        watchUrl,
+        clientProfile,
+        languageHint,
+        regionHint,
+        signatureTimestamp,
+        webClientVersionOverride,
+        playerConfig,
+        poToken,
+        visitorData,
+      );
+      if (playerPayload) {
+        return { clientProfile, playerPayload };
+      }
+      if (clientProfile !== clientProfiles[clientProfiles.length - 1]) {
+        await sleepBriefly(CLIENT_ATTEMPT_DELAY_MS);
+      }
+    }
+    return null;
+  };
+
+  // Serial client walk: first payload with usable streaming formats wins.
+  const firstPass = await walkForPlayerPayload(orderedProfiles, null);
+  if (!firstPass) {
+    return null;
+  }
+
+  // Re-fetch with the fresh visitorData attached so the adaptive stream URLs
+  // YouTube returns are actually servable (no PO token needed). ANDROID_VR
+  // URLs serve full adaptive files, while plain ANDROID URLs stay chunk-capped.
+  const responseContext = (firstPass.playerPayload as Record<string, unknown> | null)
+    ?.responseContext as Record<string, unknown> | null | undefined;
+  const bootstrapVisitorData =
+    typeof responseContext?.visitorData === 'string' && responseContext.visitorData.length > 0
+      ? responseContext.visitorData
+      : null;
+  if (bootstrapVisitorData) {
+    const vrProfile =
+      orderedProfiles.find((clientProfile) => clientProfile.profileLabel === 'android_vr')
+      ?? firstPass.clientProfile;
+    const unlockedPass = await walkForPlayerPayload([vrProfile], bootstrapVisitorData);
+    if (unlockedPass) {
+      logInfo(`[${videoId}] ${LOG_VISITOR_BOOTSTRAP}`);
+      stickyPlayerClientLabel = unlockedPass.clientProfile.profileLabel;
+      return unlockedPass;
+    }
+  }
+
+  stickyPlayerClientLabel = firstPass.clientProfile.profileLabel;
+  logInfo(
+    `[${videoId}] ${LOG_CLIENT_PREFIX} ${firstPass.clientProfile.profileLabel} ok (streaming formats)`,
+  );
+  return firstPass;
 };
 
 // Test/benchmark helper: clear sticky client between runs.

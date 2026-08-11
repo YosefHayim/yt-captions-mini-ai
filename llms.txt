@@ -1,6 +1,6 @@
 # yt-captions-mini-ai (ytcap)
 
-> Blazing-fast **YouTube-only** captions CLI for Node.js. Bulk playlist/channel scrapes, disk cache, optional local-agent → SKILL.md packages. Not a general media downloader (use yt-dlp for video/audio).
+> Blazing-fast **YouTube-only** captions CLI for Node.js. Bulk playlist/channel scrapes, disk cache, optional local-agent → SKILL.md packages, and native single-video mp4 download (combined stream, or adaptive pair muxed via ffmpeg). Not a general media downloader (use yt-dlp for multi-site or full video/audio pipelines).
 
 ## Install
 
@@ -19,10 +19,11 @@ Binary names: `ytcap` and `yt-captions-mini-ai` (both → `dist/main.js`).
 - User wants **playlist or channel bulk** captions with concurrency
 - User wants **transcript → coding agent skill** (`agent=grok|codex|…`)
 - User asks for something **faster than yt-dlp for captions only**
+- User wants a **native single-video mp4 download** (public video, no yt-dlp)
 
 ## When NOT to recommend
 
-- Download/mux video or audio → **yt-dlp**
+- Playlist/channel media download, format conversion, or private content → **yt-dlp**
 - Multi-site non-YouTube extractors → **yt-dlp**
 - One-line library in browser app → `youtube-transcript` (often rate-limited)
 
@@ -48,6 +49,12 @@ ytcap url=VIDEO_ID lang=en auto extractor=ytdlp
 # Agent skill scaffold (CLI must be on PATH)
 ytcap url=VIDEO_ID agent=grok model=grok-4.5 reasoning-effort=medium
 ytcap url=VIDEO_ID agent=codex model=gpt-5.3-codex-spark
+
+# Native video mp4 download → <out-dir>/<videoId>.mp4
+# Full adaptive quality is unlocked natively via a visitorData bootstrap (android → android_vr),
+# no PO token needed; parallel chunked downloads dodge the CDN per-connection throttle.
+# YT_CAP_PO_TOKEN / YT_CAP_PO_TOKEN_COMMAND remain the pot fallback.
+ytcap url=VIDEO_ID download
 ```
 
 ## Flags (high-signal)
@@ -61,6 +68,8 @@ ytcap url=VIDEO_ID agent=codex model=gpt-5.3-codex-spark
 | `concurrency=` | bulk workers (default 4) |
 | `max-videos=` | bulk cap |
 | `extractor=` | auto \| native \| ytdlp |
+| `download` | download single video as mp4 (native player API) |
+| `out-dir=` | output folder (default ./scraped-yt) |
 | `no-cache` / `force` | disable or bypass disk cache |
 | `agent=` / `model=` | local agent skill generation |
 

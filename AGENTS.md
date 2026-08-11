@@ -27,7 +27,7 @@ Keep one instruction hub here. Do not invent parallel root guides for each codin
 ## Commands
 
 ```bash
-npm start -- url=<video|playlist|@channel|@channel/shorts> [format=vtt] [lang=en] [auto] [stdout] [out-dir=./scraped-yt] [output-format=txt|md|json|jsonl] [cookies=./cookies.txt] [agent=codex|grok|…] [model=<id>] [reasoning-effort=low|medium|high] [system-prompt="..."]
+npm start -- url=<video|playlist|@channel|@channel/shorts> [format=vtt] [lang=en] [auto] [stdout] [download] [out-dir=./scraped-yt] [output-format=txt|md|json|jsonl] [cookies=./cookies.txt] [agent=codex|grok|…] [model=<id>] [reasoning-effort=low|medium|high] [system-prompt="..."]
 npm run typecheck
 npm run build
 ```
@@ -38,6 +38,7 @@ CLI options (see `src/cli.ts`):
 - `lang=` — language tokens; default `en`
 - `auto` — allow auto-generated captions
 - `stdout` — print captions instead of writing files
+- `download` — download a single video as mp4 via the native player API (no yt-dlp)
 - `cookies=` — optional Netscape cookies for public session
 - `agent=` — local agent for skill scaffold
 - `model=` / `reasoning-effort=` — agent model and effort when supported
@@ -61,7 +62,8 @@ Bulk output roots (under `out-dir`):
 | `src/captions.ts` | Caption track selection / URLs |
 | `src/playlist.ts` | Playlist video IDs |
 | `src/channel.ts` | Channel Videos/Shorts discovery + bulk folder names |
-| `src/player-api.ts` | Multi-client Innertube player |
+| `src/player-api.ts` | Multi-client Innertube player (+ streaming-format payload) |
+| `src/video.ts` | mp4 download (progressive / adaptive pair + ffmpeg mux) |
 | `src/http.ts` | Fetch + 429 backoff + session cookies |
 | `src/cookies.ts` | Netscape jar |
 | `src/output.ts` | Caption → txt/md/json/jsonl |
@@ -95,7 +97,7 @@ When `agent=` is set:
 - Fail fast with clear errors; no silent fallbacks that hide causes.
 - Domain-specific names (see `CODE-STYLE.md`); no backward-compat aliases for renames.
 - Prefer [Effect](https://effect.website/) where already used; do not add frameworks casually.
-- Do not grow into yt-dlp (no A/V pipeline, no private-content scraping).
+- Do not grow into yt-dlp (no full A/V pipeline, no private-content scraping). Native `download` stays limited to mp4 (combined stream, or adaptive pair muxed via `ffmpeg`); full adaptive quality is unlocked by a `visitorData` bootstrap (android → android_vr), with parallel chunked downloads to dodge the CDN's per-connection throttle. `YT_CAP_PO_TOKEN` / `YT_CAP_PO_TOKEN_COMMAND` remain the documented pot fallback.
 
 ## Verify before done
 

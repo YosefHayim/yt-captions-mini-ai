@@ -37,6 +37,7 @@ import { parseSkillPackage, persistSkillPackage } from './skill-output.js';
 import { criteriaFromCliOptions, filterVideoIdsByCriteria } from './video-filters.js';
 import { readTranscriptCache, writeTranscriptCache } from './transcript-cache.js';
 import { extractCaptionsWithYtdlp } from './extractor-ytdlp.js';
+import { downloadVideoWithPlayerApi } from './video.js';
 
 import { CONSTANTS } from './constants.js';
 
@@ -96,6 +97,7 @@ const {
   AGENT_RAW_RESPONSE_EXTENSION,
   LOG_AGENT_EMPTY,
   LOG_AGENT_STARTED,
+  LOG_VIDEO_SINGLE_ONLY,
 } = CONSTANTS.main;
 
 const renderSubtitleFilePath = (
@@ -801,12 +803,33 @@ const run = async (): Promise<void> => {
 
   // Channel URLs first (handle / channel id), then playlists, then single video.
   if (isYoutubeChannelUrl(sourceUrl)) {
+    if (options.downloadVideo) {
+      throw new Error(LOG_VIDEO_SINGLE_ONLY);
+    }
     await runForChannelUrl(sourceUrl, options);
     return;
   }
 
   if (isYoutubePlaylistUrl(sourceUrl) && !resolveVideoId(sourceUrl)) {
+    if (options.downloadVideo) {
+      throw new Error(LOG_VIDEO_SINGLE_ONLY);
+    }
     await runForPlaylistUrl(sourceUrl, options);
+    return;
+  }
+
+  const videoId = resolveVideoId(sourceUrl);
+  if (!videoId) {
+    throw new Error(`${LOG_INVALID_VIDEO_ID} ${sourceUrl}`);
+  }
+
+  // Video download mode: fetch the best playable mp4 via the player API.
+  if (options.downloadVideo) {
+    await downloadVideoWithPlayerApi(
+      getWatchUrl(sourceUrl),
+      videoId,
+      options.outDirectory,
+    );
     return;
   }
 

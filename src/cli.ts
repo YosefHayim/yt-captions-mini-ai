@@ -71,6 +71,7 @@ const {
   OPTION_BOOLEAN_HELP,
   OPTION_BOOLEAN_NO_CACHE,
   OPTION_BOOLEAN_FORCE,
+  OPTION_BOOLEAN_DOWNLOAD,
   NONE_AGENT_VALUE,
   CLI_OPTION_SEPARATOR,
   BOOLEAN_TRUE,
@@ -159,6 +160,7 @@ const defaultOptions: CliOptions = {
   useCache: true,
   forceRefresh: false,
   extractorMode: DEFAULT_EXTRACTOR_MODE as ExtractorMode,
+  downloadVideo: false,
 };
 
 const isSubtitleFormat = (formatToken: string): formatToken is SubtitleFormat => {
@@ -396,6 +398,10 @@ const parseBooleanFlag = (optionKey: string, parsedOptions: CliOptions): void =>
   }
   if (optionKey === OPTION_BOOLEAN_FORCE) {
     parsedOptions.forceRefresh = true;
+    return;
+  }
+  if (optionKey === OPTION_BOOLEAN_DOWNLOAD) {
+    parsedOptions.downloadVideo = true;
     return;
   }
 };
@@ -638,6 +644,7 @@ const parseInteractiveOptions = async (): Promise<CliOptions> => {
     useCache: true,
     forceRefresh: false,
     extractorMode: DEFAULT_EXTRACTOR_MODE as ExtractorMode,
+    downloadVideo: false,
   };
   outro(OUTRO_MESSAGE);
   return interactiveOptions;
@@ -671,7 +678,7 @@ const collectArguments = (argumentTokens: string[]): { sourceUrl: string; option
         continue;
       }
 
-      if (optionKey === OPTION_BOOLEAN_AUTO || optionKey === OPTION_BOOLEAN_STDOUT || optionKey === OPTION_BOOLEAN_NO_CACHE || optionKey === OPTION_BOOLEAN_FORCE) {
+      if (optionKey === OPTION_BOOLEAN_AUTO || optionKey === OPTION_BOOLEAN_STDOUT || optionKey === OPTION_BOOLEAN_NO_CACHE || optionKey === OPTION_BOOLEAN_FORCE || optionKey === OPTION_BOOLEAN_DOWNLOAD) {
         parseBooleanFlag(optionKey, parsedOptions);
         continue;
       }
@@ -708,6 +715,14 @@ const collectArguments = (argumentTokens: string[]): { sourceUrl: string; option
         }
         continue;
       }
+      if (optionKey === OPTION_BOOLEAN_DOWNLOAD) {
+        if (optionValue.length === 0) {
+          parsedOptions.downloadVideo = true;
+        } else {
+          parsedOptions.downloadVideo = parseBoolean(optionValue);
+        }
+        continue;
+      }
       throw new Error(`Unknown option: ${optionKey}`);
     }
 
@@ -725,6 +740,10 @@ const collectArguments = (argumentTokens: string[]): { sourceUrl: string; option
     }
     if (cliToken === OPTION_BOOLEAN_FORCE) {
       parsedOptions.forceRefresh = true;
+      continue;
+    }
+    if (cliToken === OPTION_BOOLEAN_DOWNLOAD) {
+      parsedOptions.downloadVideo = true;
       continue;
     }
 

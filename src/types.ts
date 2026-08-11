@@ -85,6 +85,8 @@ export type CliOptions = {
   forceRefresh: boolean;
   // Captions extractor backend (native Innertube / yt-dlp / auto).
   extractorMode: ExtractorMode;
+  // When true, download the video mp4 instead of captions (single video only).
+  downloadVideo: boolean;
 };
 
 // Public metadata used to decide whether a bulk video id should be scraped.
