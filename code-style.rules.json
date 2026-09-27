@@ -1,0 +1,206 @@
+{
+  "version": 3,
+  "guide": "CODE-STYLE.md",
+  "rules": [
+    {
+      "id": "use.arrow-functions-for-all-function",
+      "statement": "Use arrow functions for all function declarations.",
+      "verify": "judgment"
+    },
+    {
+      "id": "prefer.explicit-domain-specific-names-over",
+      "statement": "Prefer explicit, domain-specific names over generic placeholders.",
+      "verify": "judgment"
+    },
+    {
+      "id": "avoid.result-response-json-data-payload",
+      "statement": "Avoid: `result`, `response`, `json`, `data`, `payload`, `row`, `text`, `value`, `item`, `output`, `input`, `tmp`.",
+      "verify": "judgment"
+    },
+    {
+      "id": "prefer.videoinfo-playerpayload-captiontracks-subtitlesou",
+      "statement": "Prefer: `videoInfo`, `playerPayload`, `captionTracks`, `subtitleSource`, `playlistEntry`, `subtitlePayload`, `optionRawToken`, `cueText`, etc.",
+      "verify": "judgment"
+    },
+    {
+      "id": "do.not-keep-backward-compat-aliases",
+      "statement": "Do **not** keep backward-compat aliases or re-export shims for renames.",
+      "verify": "judgment"
+    },
+    {
+      "id": "declare.module-level-hardcoded-values-in",
+      "statement": "Declare module-level hardcoded values in `src/constants.ts` only \u2014 one nested `CONSTANTS` object keyed by module (`shared`, `main`, `agent`, \u2026).",
+      "verify": "judgment"
+    },
+    {
+      "id": "keep.one-responsibility-per-file",
+      "statement": "Keep one responsibility per file.",
+      "verify": "judgment"
+    },
+    {
+      "id": "keep.parsing-and-transport-concerns-separate",
+      "statement": "Keep parsing and transport concerns separate from selection/orchestration logic.",
+      "verify": "judgment"
+    },
+    {
+      "id": "use.immutable-values-when-possible-const",
+      "statement": "Use immutable values when possible (`const` everywhere).",
+      "verify": "judgment"
+    },
+    {
+      "id": "keep.logs-one-line-and-consistent",
+      "statement": "Keep logs one-line and consistent with a tag.",
+      "verify": "judgment"
+    },
+    {
+      "id": "info",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "warn",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "err",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "prefer.small-utility-functions-over-inline",
+      "statement": "Prefer small utility functions over inline one-liners.",
+      "verify": "judgment"
+    },
+    {
+      "id": "every.declared-type-interface-and-schema",
+      "statement": "Every declared type/interface and schema field should have a one-line comment describing intent.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.main-ts-cli-entrypoint-only",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.cli-ts-argument-parsing",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.captions-ts-caption-track-parsing",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.playlist-ts-playlist-page-extraction",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.channel-ts-channel-videos-shorts",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.video-metadata-ts-public-title",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.video-filters-ts-and-combine",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.filters-date-range-ts-duration",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.http-ts-network-helpers",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.parsing-ts-generic-html-json",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.log-ts-structured-console-logs",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.types-ts-shared-typed-contracts",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.constants-ts-ssot-nested-constants",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.agent-ts-local-agent-cli",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.player-api-ts-multi-client",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.output-ts-caption-conversion-to",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.cookies-ts-netscape-cookie-file",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.http-ts-fetch-with-429",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.skill-prompt-ts-per-agent",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "src.skill-output-ts-parse-write",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "docs.skill-authoring-md-local-fallback",
+      "statement": "Follow this project rule as specified.",
+      "verify": "judgment"
+    },
+    {
+      "id": "agent.skills-land-under-scraped-yt",
+      "statement": "Agent skills land under `scraped-yt/agents/<agent>/<videoId>/<skill>/SKILL.md`.",
+      "verify": "judgment"
+    },
+    {
+      "id": "no.heavy-abstractions",
+      "statement": "No heavy abstractions.",
+      "verify": "judgment"
+    },
+    {
+      "id": "no.fallback-behavior-that-hides-failure",
+      "statement": "No fallback behavior that hides failure causes.",
+      "verify": "judgment"
+    },
+    {
+      "id": "fail.fast-with-clear-error-text",
+      "statement": "Fail fast with clear error text when expected YouTube markers/fields are missing.",
+      "verify": "judgment"
+    }
+  ]
+}
