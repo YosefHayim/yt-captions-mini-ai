@@ -1,6 +1,22 @@
+# dependencies
 node_modules/
+
+# build
 dist/
+
+# cli output
 scraped-yt/
-scraped-yt/**
-.worktrees/
+scraped-yt-canary/
+
+# secrets
+cookies.txt
+
+# editor and OS
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# local
+.worktrees/

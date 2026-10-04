@@ -467,19 +467,6 @@ Follow this project rule as specified.
 
 Why: Keeps the local idiom consistent and reviewable.
 
-### docs/skill-authoring.md — local fallback skill authoring
-[rule:docs.skill-authoring-md-local-fallback] · verify: judgment
-
-Follow this project rule as specified.
-
-```ts
-// ✓ yt-captions-mini-ai idiom
-
-// ✗ rejected shape
-```
-
-Why: Keeps the local idiom consistent and reviewable.
-
 ### Agent skills land under scraped-yt/agents/<agent>/<videoId>/
 [rule:agent.skills-land-under-scraped-yt] · verify: judgment
 

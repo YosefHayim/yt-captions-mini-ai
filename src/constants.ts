@@ -370,7 +370,6 @@ export const CONSTANTS = {
   },
 
   skillPrompt: {
-    LOCAL_SKILL_REFERENCE: 'docs/skill-authoring.md',
     FILE_MARKER_OPEN: '===FILE:',
     FILE_MARKER_CLOSE: '===',
     FILE_END_MARKER: '===END===',

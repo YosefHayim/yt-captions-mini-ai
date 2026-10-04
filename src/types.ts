@@ -394,8 +394,6 @@ export type AgentSkillProfile = {
   displayName: string;
   // Primary official docs URL when published.
   officialDocsUrl: string | null;
-  // Local fallback reference when official docs are thin/missing.
-  localReferencePath: string;
   // Where the user would install the skill for this agent.
   installPathHint: string;
   // Frontmatter fields required/expected for this agent.

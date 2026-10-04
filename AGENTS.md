@@ -13,7 +13,6 @@ Human landing page: [README.md](README.md). Visual: [assets/hero.png](assets/her
 | Shared types (SSOT) | `src/types.ts` |
 | Package scripts | `package.json` |
 | Human pitch / usage | `README.md` |
-| Skill authoring fallback | `docs/skill-authoring.md` |
 
 Keep one instruction hub here. Do not invent parallel root guides for each coding agent.
 
@@ -88,7 +87,7 @@ When `agent=` is set:
   <skill-name>/SKILL.md
 ```
 
-- Skill prompt: official agent docs when known ([Claude skills](https://code.claude.com/docs/en/skills), [Codex skills](https://github.com/openai/codex/blob/main/docs/skills.md), [agentskills.io](https://agentskills.io/specification)), else `docs/skill-authoring.md`
+- Skill prompt: official agent docs when known ([Claude skills](https://code.claude.com/docs/en/skills), [Codex skills](https://github.com/openai/codex/blob/main/docs/skills.md), [agentskills.io](https://agentskills.io/specification))
 - `metrics.json`: requested model/effort, tokens when stdout exposes them, `unavailableNotes` for nulls
 
 ## Working rules
