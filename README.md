@@ -126,7 +126,7 @@ ytcap url=https://www.youtube.com/watch?v=VIDEO_ID agent=codex model=gpt-5.3-cod
 ytcap url=VIDEO_ID agent=grok model=grok-4.5 reasoning-effort=high
 ```
 
-Default system prompt authors **official-style skill packages** (YAML frontmatter + when-to-use + procedure), using each agent’s docs when known, otherwise [`docs/skill-authoring.md`](docs/skill-authoring.md). Extra guidance: `system-prompt="..."`.
+Default system prompt authors **official-style skill packages** (YAML frontmatter + when-to-use + procedure), using each agent’s docs when known, otherwise the [Agent Skills spec](https://agentskills.io/specification). Extra guidance: `system-prompt="..."`.
 
 ## Output layout
 
@@ -237,7 +237,6 @@ YouTube-only, captions-only (client ideas inspired by [yt-dlp](https://github.co
 
 - [AGENTS.md](AGENTS.md) — contract for coding agents ([agents.md](https://agents.md/) convention)
 - [CODE-STYLE.md](CODE-STYLE.md) — file map and style rules
-- [docs/skill-authoring.md](docs/skill-authoring.md) — portable skill authoring reference
 
 ## License
 

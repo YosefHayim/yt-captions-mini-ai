@@ -3,7 +3,6 @@ import { AgentSkillProfile, LocalAgent } from './types.js';
 import { CONSTANTS } from './constants.js';
 
 const {
-  LOCAL_SKILL_REFERENCE,
   FILE_MARKER_OPEN,
   FILE_MARKER_CLOSE,
   FILE_END_MARKER,
@@ -15,7 +14,6 @@ export const AGENT_SKILL_PROFILES: Record<LocalAgent, AgentSkillProfile> = {
     localAgent: 'claude',
     displayName: 'Claude Code',
     officialDocsUrl: 'https://code.claude.com/docs/en/skills',
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: '~/.claude/skills/<name>/SKILL.md or .claude/skills/<name>/SKILL.md',
     frontmatterRequirements: 'YAML frontmatter with description (required/recommended). Optional: name, when_to_use, allowed-tools, disable-model-invocation, argument-hint, paths, metadata.',
     formatNotes: 'Follow Agent Skills + Claude Code extensions. Directory name becomes /skill-name. Keep body actionable; put long material in references/.',
@@ -24,7 +22,6 @@ export const AGENT_SKILL_PROFILES: Record<LocalAgent, AgentSkillProfile> = {
     localAgent: 'codex',
     displayName: 'OpenAI Codex CLI',
     officialDocsUrl: 'https://github.com/openai/codex/blob/main/docs/skills.md',
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: '~/.codex/skills/<name>/SKILL.md or .codex/skills/<name>/SKILL.md',
     frontmatterRequirements: 'YAML frontmatter with name + description. Optional metadata.short-description.',
     formatNotes: 'Codex discovers folders containing SKILL.md. Description is the primary trigger. Progressive disclosure: read SKILL.md first, then references/ only as needed.',
@@ -33,7 +30,6 @@ export const AGENT_SKILL_PROFILES: Record<LocalAgent, AgentSkillProfile> = {
     localAgent: 'grok',
     displayName: 'Grok Build',
     officialDocsUrl: null,
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: '~/.grok/skills/<name>/SKILL.md or .grok/skills/<name>/SKILL.md',
     frontmatterRequirements: 'YAML frontmatter with name + description. Optional metadata.short-description.',
     formatNotes: 'Match Grok create-skill format exactly. name is lowercase-hyphen slug. description must include trigger phrases and /slash-command usage.',
@@ -42,7 +38,6 @@ export const AGENT_SKILL_PROFILES: Record<LocalAgent, AgentSkillProfile> = {
     localAgent: 'agent',
     displayName: 'Grok Build (agent alias)',
     officialDocsUrl: null,
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: '~/.grok/skills/<name>/SKILL.md or .grok/skills/<name>/SKILL.md',
     frontmatterRequirements: 'YAML frontmatter with name + description. Optional metadata.short-description.',
     formatNotes: 'Same as Grok Build skills.',
@@ -51,7 +46,6 @@ export const AGENT_SKILL_PROFILES: Record<LocalAgent, AgentSkillProfile> = {
     localAgent: 'gemini',
     displayName: 'Gemini CLI',
     officialDocsUrl: 'https://geminicli.com/docs/',
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: 'Prefer portable Agent Skills layout (skill-name/SKILL.md) for cross-agent reuse.',
     frontmatterRequirements: 'Portable name + description frontmatter (agentskills.io).',
     formatNotes: 'If Gemini-specific skill packaging is unavailable, emit portable SKILL.md packages and note install mapping in the body.',
@@ -60,7 +54,6 @@ export const AGENT_SKILL_PROFILES: Record<LocalAgent, AgentSkillProfile> = {
     localAgent: 'cursor',
     displayName: 'Cursor',
     officialDocsUrl: null,
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: 'Prefer portable Agent Skills layout; map into Cursor rules/skills as needed.',
     frontmatterRequirements: 'Portable name + description frontmatter (agentskills.io).',
     formatNotes: 'Use portable SKILL.md so the skill can also run in Claude/Codex/Grok. Include clear when-to-use triggers.',
@@ -69,16 +62,14 @@ export const AGENT_SKILL_PROFILES: Record<LocalAgent, AgentSkillProfile> = {
     localAgent: 'devin',
     displayName: 'Devin',
     officialDocsUrl: null,
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: 'Prefer portable Agent Skills layout (skill-name/SKILL.md).',
     frontmatterRequirements: 'Portable name + description frontmatter (agentskills.io).',
-    formatNotes: 'When Devin-native skill docs are unavailable, follow docs/skill-authoring.md and agentskills.io.',
+    formatNotes: 'When Devin-native skill docs are unavailable, follow agentskills.io.',
   },
   kiro: {
     localAgent: 'kiro',
     displayName: 'Kiro',
     officialDocsUrl: 'https://kiro.dev/docs/',
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: 'Prefer portable Agent Skills layout; also note .kiro/agents/ custom-agent patterns when relevant.',
     frontmatterRequirements: 'Portable name + description frontmatter unless Kiro agent JSON/YAML is clearly better for the task.',
     formatNotes: 'Default to SKILL.md packages for portability. Mention Kiro steering/agent config only when the transcript is about Kiro itself.',
@@ -87,7 +78,6 @@ export const AGENT_SKILL_PROFILES: Record<LocalAgent, AgentSkillProfile> = {
     localAgent: 'kimi',
     displayName: 'Kimi CLI',
     officialDocsUrl: 'https://moonshotai.github.io/kimi-cli/en/',
-    localReferencePath: LOCAL_SKILL_REFERENCE,
     installPathHint: 'Prefer portable Agent Skills layout (skill-name/SKILL.md).',
     frontmatterRequirements: 'Portable name + description frontmatter (agentskills.io).',
     formatNotes: 'Emit portable SKILL.md packages suitable for cross-agent reuse.',
@@ -109,8 +99,7 @@ Your ONLY job: convert the transcript into one or more production-quality agent 
 ## Sources of truth (in order)
 1. ${officialDocsLine}
 2. Open standard: ${OPEN_STANDARD_URL}
-3. Local fallback reference in this repo: ${skillProfile.localReferencePath}
-If (1) is missing, follow (2) + (3) exactly. Do not invent a proprietary skill format.
+If (1) is missing, follow (2) exactly. Do not invent a proprietary skill format.
 
 ## Target agent
 - Agent: ${skillProfile.displayName} (\`${skillProfile.localAgent}\`)
