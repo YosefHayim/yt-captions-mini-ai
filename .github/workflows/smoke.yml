@@ -1,0 +1,17 @@
+name: Smoke
+'on':
+  workflow_call: null
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+      - name: Smoke CLI help/usage
+        run: |
+          node dist/main.js 2>&1 | head -5 || true
+          node dist/main.js url= 2>&1 | head -3 || true
+    timeout-minutes: 15
