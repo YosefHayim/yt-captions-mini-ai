@@ -108,3 +108,7 @@ When `agent=` is set:
 - Public pages only; optional cookies are for public session resilience, not private content.
 - Do not commit secrets or large caption dumps (`scraped-yt/` is gitignored).
 - Keep playlist/channel throttling; leave `dist/` and `node_modules/` alone unless the task is about them.
+
+## Local CI
+
+Run `act workflow_dispatch -W .github/workflows/ci.yml` before opening a PR.

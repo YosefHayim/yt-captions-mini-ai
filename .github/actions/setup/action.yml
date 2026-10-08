@@ -1,0 +1,29 @@
+name: Setup
+description: Install the project Node version and frozen dependencies with an explicit store cache.
+inputs:
+  registry-url:
+    description: Registry used when publishing a package.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: 22
+        package-manager-cache: false
+        registry-url: ${{ inputs.registry-url }}
+    - name: Locate dependency cache
+      id: store
+      shell: bash
+      run: echo "path=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+    - name: Cache dependencies
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: npm-store-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package-lock.json') }}
+        restore-keys: npm-store-${{ runner.os }}-${{ runner.arch }}-node22-
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
